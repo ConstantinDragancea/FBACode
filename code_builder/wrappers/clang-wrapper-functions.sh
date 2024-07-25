@@ -106,7 +106,9 @@ function run_compilation() {
         # if there are multiple input files, -emit-llvm would faile with the -o option
         #  || true because we want to continue, even if the command fails
         ${compiler} -Qunused-arguments -emit-llvm -c "${ARGS[@]}" "${OMIT_ERRORS_ARGS}" > /dev/null 2>&1 || true
-        ${compiler} -Qunused-arguments -emit-ast "${ARGS[@]}" "${OMIT_ERRORS_ARGS}" > /dev/null 2>&1 || true
+        ${compiler} -MJ - -Qunused-arguments -emit-ast "${ARGS[@]}" "${OMIT_ERRORS_ARGS}" 2> /dev/null 1>> /home/fba_code/build/compile_commands.log || true
+        # take the header dependencies, pretty print into file, remove first line since it looks like "main.o: main.cpp"
+        ${compiler} -Qunused-arguments -M -MG "${ARGS[@]}" "${OMIT_ERRORS_ARGS}" | sed 's/\s+/\n/g' | tail -n +2 >> /home/fba_code/build/header_dependencies.log 2> /dev/null || true
         # -ast-print-xml seems to be deprecated
         # ${compiler} -Qunused-arguments -ast-print-xml "${ARGS[@]}"
         ${compiler} "${@:2}" "${OMIT_ERRORS_ARGS}"
@@ -131,7 +133,10 @@ function run_compilation() {
     elif [ "$intercep_compilation_no_c" == true ]; then
         # echo "Run LLVM generation with flags, add -c manually: ${ARGS[@]}" > /dev/stderr
         ${compiler} -Qunused-arguments -emit-llvm "${ARGS[@]}" -c "${OMIT_ERRORS_ARGS}" > /dev/null 2>&1 || true
-        ${compiler} -Qunused-arguments -emit-ast "${ARGS[@]}" "${OMIT_ERRORS_ARGS}" > /dev/null 2>&1 || true
+        ${compiler} -MJ - -Qunused-arguments -emit-ast "${ARGS[@]}" "${OMIT_ERRORS_ARGS}" 2> /dev/null 1>> /home/fba_code/build/compile_commands.log || true
+
+        # take the header dependencies, pretty print into file, remove first line since it looks like "main.o: main.cpp"
+        ${compiler} -Qunused-arguments -M -MG "${ARGS[@]}" "${OMIT_ERRORS_ARGS}" | sed 's/\s+/\n/g' | tail -n +2 >> /home/fba_code/build/header_dependencies.log 2> /dev/null || true
         ${compiler} "${@:2}" "${OMIT_ERRORS_ARGS}"
     else
         #echo "Run linking with flags: "${IR_FILES[@]}""

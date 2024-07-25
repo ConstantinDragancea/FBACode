@@ -357,8 +357,8 @@ class ConanFetcher:
                 "-c",
                 "shopt -s dotglob; conan search \"*\" --remote=conancenter --format=json"
             ],
-            stderr=PIPE,
-            stdout=PIPE
+            capture_output=True,
+            text = True
         )
 
         pkg_list = list(json.loads(out.stdout)["conancenter"].keys())

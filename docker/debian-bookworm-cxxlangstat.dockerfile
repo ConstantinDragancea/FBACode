@@ -3,6 +3,7 @@ ARG CLANG_VERSION
 FROM spcleth/fbacode:debian-bookworm-clang-base-test-${CLANG_VERSION}
 
 ARG CLANG_VERSION
+ENV CLANG_VERSION=${CLANG_VERSION}
 # ENV BASE=$BASE
 RUN echo "building image for clang version ${CLANG_VERSION}"
 
@@ -24,7 +25,7 @@ RUN mkdir -p ${HOME_DIR}
 RUN mkdir -p ${HOME_DIR}/ast_archive
 WORKDIR ${HOME_DIR}
 # ADD code_builder/__init__.py code_builder/__init__.py
-ADD code_analyzer/docker_entrypoint.py init.py
+ADD code_analyzer/docker_entrypoint.py analysis_init.py
 ADD code_builder/utils/ utils
 ADD code_builder/build_systems/ build_systems
 ADD code_builder/wrappers/ wrappers
@@ -43,4 +44,5 @@ RUN cp ${CXX_LANGSTAT_PROJECT_PATH}/build/cxx-langstat /usr/lib/llvm-${CLANG_VER
 RUN ln -fs /usr/lib/llvm-${CLANG_VERSION}/bin/cxx-langstat /usr/bin/cxx-langstat
 RUN mkdir -p ${HOME_DIR}/analyze
 
-ENTRYPOINT ["python3", "-u", "init.py", "input.json"]
+
+ENTRYPOINT ["python3", "-u", "analysis_init.py", "input.json"]

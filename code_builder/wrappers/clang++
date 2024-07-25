@@ -18,3 +18,28 @@ source "${DIR}/clang-wrapper-functions.sh"
 echo "${CLANGCXX} ${@}"  >> /home/fba_code/build/clang_calls.log
 run_compilation "${CLANGCXX}" "$@"
 
+# DIR=/home/fba_code/wrappers
+# source "${DIR}/clang-wrapper.cfg"
+# "${CLANGCXX}" "$@"
+
+# # Check if this is a recursive call to prevent infinite recursion
+# if [ "$CLANGCXX_WRAPPER_CALLED" != "1" ]; then
+#     # Set the environment variable to mark that the wrapper has been called
+#     export CLANGCXX_WRAPPER_CALLED=1
+    
+#     DIR=/home/fba_code/wrappers
+#     source "${DIR}/clang-wrapper.cfg"
+#     source "${DIR}/clang-wrapper-functions.sh"
+
+#     echo "${CLANGCXX} ${@}"  >> /home/fba_code/build/clang_calls.log
+#     run_compilation "${CLANGCXX}" "$@"
+
+#     # Unset the environment variable for subsequent calls
+#     unset CLANGCXX_WRAPPER_CALLED
+# else
+#     # This else clause handles the actual g++ invocation when the wrapper calls itself
+#     # /usr/bin/g++ "$@"
+
+#     # actually do nothing since the run_compilation function does this part as well
+#     true
+# fi

@@ -235,7 +235,7 @@ def start_docker(
 
     # Get output JSON
     try:
-        binary_data, _ = container.get_archive(f"{DOCKER_MOUNT_POINT}/output.json")
+        binary_data, _ = container.get_archive(f"{DOCKER_MOUNT_POINT}/analyze/output.json")
         # with next(binary_data) not the whole thing is loaded if file is big
         bin = b"".join(list(binary_data))
         tar_file = tarfile.open(fileobj=io.BytesIO(bin))
@@ -260,7 +260,8 @@ def start_docker(
     if "analyze" not in project:
         project["analyze"] = {}
     project["analyze"]["docker_log"] = docker_log_file
-    return True
+    
+    return True and project["analysis emit-features retcode"] == 0 and project["analysis emit-stats retcode"] == 0
 
 def analyze_project(idx, path_to_collection, ast_archive_root, project_name, project, ctx):
     pass
@@ -283,7 +284,7 @@ def fetch_AST_and_analyze(idx, path_to_collection, ast_archive_root, results_dir
         # copy the tar.gz from the remote server to local
         # TODO: also make it work if the artifacts are stored locally
         try:
-            with Connection(host = 'spclstorage.inf.ethz.ch', user = ctx.cfg["analyze"]["user"], connect_timeout = 5) as conn:
+            with Connection(host = ctx.cfg["remote"]["host"], user = ctx.cfg["remote"]["user"], connect_timeout = 5) as conn:
                 # print(f"Remote path: {join(path_to_collection, project_name + '.tar.gz')}")
                 # print(f"Local path: {join(ctx.cfg['analyze']['ast_archive'], project_name, project_name + '.tar.gz')}")
                 conn.get(remote = join(path_to_collection, project_name + '.tar.gz'), 
@@ -298,6 +299,9 @@ def fetch_AST_and_analyze(idx, path_to_collection, ast_archive_root, results_dir
 
     # start a docker machine and transfer the tar.gz to it
     print(f"Got the tar.gz for {project_name}, getting the dockerfile image now")
+
+    project['size_statistics'] = dict()
+    project['size_statistics']['archive_size'] = os.path.getsize(join(ast_archive, project_name + '.tar.gz'))
     
     try:
         dockerfile = get_dockerfile(project, ctx)
@@ -314,6 +318,8 @@ def fetch_AST_and_analyze(idx, path_to_collection, ast_archive_root, results_dir
         "dockerfile": dockerfile,
     }
     print(f"Before starting docker, results_dir = {abspath(results_dir)}")
+
+    total_analyze_time_start = time()
     try:
         result = start_docker(idx, project_name, project, ctx, **docker_conf)
     except Exception as e:
@@ -327,14 +333,19 @@ def fetch_AST_and_analyze(idx, path_to_collection, ast_archive_root, results_dir
 
     # remove the archive from local storage
     shutil.rmtree(ast_archive, ignore_errors=True)
-    print(f"Removed ASTs of {project_name}")
+    print(f"Removed ASTs of {project_name}, path: {ast_archive}")
 
     if result == False:
-        shutil.rmtree(results_dir, ignore_errors=True)
-        print(f"Removed results of {project_name}")
+        # shutil.rmtree(results_dir, ignore_errors=True)
+        # print(f"Removed results of {project_name}")
         project["analysis"] = "start_docker fail"
     else:
         project["analysis"] = "success"
+
+    total_analyze_time_end = time()
+    project['size_statistics']['total_analysis_time'] = total_analyze_time_end - total_analyze_time_start
+    print(f"Analyzed {project_name} in {total_analyze_time_end - total_analyze_time_start} [s]")
+
     return project_name, project
 
 def analyze_projects(path_to_collection, ast_archive_root, results_dir_root, projects_info, cfg):
@@ -365,6 +376,8 @@ def analyze_projects(path_to_collection, ast_archive_root, results_dir_root, pro
     # with open("cache_no_asts.json", "r") as fin:
     #     cache_no_asts = json.load(fin)
 
+    nr_of_asts_json = dict()
+
     with concurrent.futures.ProcessPoolExecutor(threads_count) as pool:
         futures = []
         start = time()
@@ -372,14 +385,14 @@ def analyze_projects(path_to_collection, ast_archive_root, results_dir_root, pro
 
         projects_info_as_list = list(projects_info.items())
         print(f"len of projects info in the beginning: {len(projects_info_as_list)}")
-        projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if "telegram" not in pname]
-        projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if "trilinos" not in pname]
-        projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if "ifcplus" not in pname]
-        projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if "kicad" not in pname]
-        projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if "quantlib" not in pname]
-        projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if "cvc4" not in pname]
-        projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if "gthumb" not in pname]
-        projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if "meshlab" not in pname]
+
+        # PROJECT_BLACKLIST = ["telegram", "ball", "cmake", "trilinos", "ifcplus", "kicad", "quantlib", "cvc4", "gthumb", "meshlab", "klayout", "digikam", "vtk9", "cegui-mk2", "qt6-declarative", "nodejs", "dart", "akonadi", "blis", "qbittorrent", "gtk3", "regina", "ceres", "dolphin"]
+        # PROJECT_BLACKLIST = ["trilinos"]
+        # PROJECT_WHITELIST = ["libpcap", "qmmp", "netsurf"]
+        PROJECT_WHITELIST = ["abseil", "actor-framework"]
+        # projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if not any([blacklisted in pname for blacklisted in PROJECT_BLACKLIST])]
+        # projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if "hypre" in pname]
+        projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if any([whitelisted in pname for whitelisted in PROJECT_WHITELIST])]
 
         projects_info_as_list = [(project_name, project) for (project_name, project) in projects_info_as_list if project["status"] == "success" and \
                     (project_name not in analyze_summary or analyze_summary[project_name]["analysis"] != "success")]
@@ -387,7 +400,7 @@ def analyze_projects(path_to_collection, ast_archive_root, results_dir_root, pro
         # projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if "abseil" in pname]
         
         # projects_info_as_list = [(project_name, project) for (project_name, project) in projects_info_as_list if "nr_asts" in project["build"] and project["build"]["nr_asts"] > 0]
-        # projects_info_as_list = [(project_name, project) for (project_name, project) in projects_info_as_list if "archive_size" in project and project["archive_size"] > 10 * 1024 * 1024 * 1024]
+        projects_info_as_list = [(project_name, project) for (project_name, project) in projects_info_as_list if ("archive_size" in project and project["archive_size"] < 10 * 1024 * 1024 * 1024) or "archive_size" not in project]
 
         random.shuffle(projects_info_as_list)
         jobs_left = len(projects_info_as_list)
@@ -429,6 +442,14 @@ def analyze_projects(path_to_collection, ast_archive_root, results_dir_root, pro
                 futures.remove(future)
 
                 analyze_summary[project_name] = project
+
+                try:
+                    nr_of_asts_json[project_name] = project["project"]["ast_files"]["nr_asts"]
+                    with open("number_of_asts.json", "w") as fout:
+                        json.dump(nr_of_asts_json, fout, indent = 2)
+                except:
+                    pass
+
 
                 with open(join(results_dir_root, "analyze_summary.json"), "w") as f:
                     f.write(json.dumps(analyze_summary, indent=2))

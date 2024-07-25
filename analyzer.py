@@ -61,7 +61,7 @@ def main():
     parser.add_argument('--results-dir', dest='results_dir', help="Folder where the cxx-langstat output is going to be saved", default='analyze')
 
     parsed_args = parser.parse_args(argv[1:])
-    path_to_collection = join('/home/cdragancea/runs_archived/', parsed_args.collection_path)
+    # path_to_collection = join('/home/cdragancea/runs_archived/', parsed_args.collection_path)
     # cfg = open_config(parsed_args, path.dirname(path.realpath(__file__)))
     # cfg['output'] = {'verbose' : parsed_args.verbose}
     # if parsed_args.out_to_file:
@@ -74,6 +74,9 @@ def main():
     if parsed_args.ast_archive:
         cfg['analyze']['ast_archive'] = parsed_args.ast_archive
 
+    path_to_collection = join(cfg['remote']['preceding_path_to_collection'], parsed_args.collection_path)
+    print(f"path_to_collection: {path_to_collection}")
+
     try:
         # TODO: for now, the analyzer looks for ASTs on a remote storage server. Make it work for local as well
         USER = cfg['remote']['user']
@@ -83,7 +86,7 @@ def main():
         _, temp_file_path = tempfile.mkstemp()
         with Connection(host = HOST, user = USER) as connection:
             # print(connection.run("uname -s").stdout.strip())
-            connection.get(remote = join(cfg['remote']['preceding_path_to_collection'], 'build_summary.json'), local = temp_file_path)
+            connection.get(remote = join(path_to_collection, 'build_summary.json'), local = temp_file_path)
         with open(temp_file_path) as tmp_file:
             projects_info = json.load(tmp_file)
         

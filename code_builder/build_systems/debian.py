@@ -44,8 +44,10 @@ class Project:
         out = run(
             ["apt-get", "source", "-y", self.name],
             cwd=temp,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            # stdout=subprocess.PIPE,
+            # stderr=subprocess.PIPE,
+            capture_output=True,
+            text=True,
         )
         if out.returncode != 0:
             self.error_log.print_error(self.idx, out.stderr)
@@ -190,7 +192,8 @@ class Project:
                 continue
             local_path = str(file)[res.end(0) + 1 :]
             makedirs(join(target_dir, dirname(local_path)), exist_ok=True)
-            shutil.copy(str(file), join(target_dir, local_path))
+            shutil.move(str(file), join(target_dir, local_path))
+            # shutil.copy(str(file), join(target_dir, local_path))
             counter += 1
         print(f"Globbed {counter} AST files")
         return True
@@ -207,6 +210,7 @@ class Project:
 
     @staticmethod
     def get_docker_image(repo_dir, clang_version=9):
-        return "spcleth/fbacode:debian-bookworm-clang-test-{}".format(clang_version)
+        return "spcleth/fbacode:debian-bookworm-clang-header-save-test-{}".format(clang_version)
+        # return "spcleth/fbacode:debian-bookworm-clang-test-{}".format(clang_version)
         # return "spcleth/fbacode:debian-bookworm-clang-{}".format(clang_version)
         # return "mcopik/fbacode:debian-buster-clang-{}".format(clang_version)

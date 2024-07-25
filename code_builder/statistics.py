@@ -159,7 +159,7 @@ class Statistics:
             for i in ci_systems:
                 self.ci_systems[i]["success"] += 1
             self.add_correct_project()
-        elif project["status"] == "crash":
+        elif project["status"] == "crash" or project["status"] == "docker_crash":
             self.build_systems[build_system]["fail"] += 1
             for i in ci_systems:
                 self.ci_systems[i]["fail"] += 1
@@ -189,7 +189,7 @@ class Statistics:
 
         else:
             if "build" in project:
-                # we pass the errror log through all the stages,
+                # we pass the error log through all the stages,
                 # always removing the found errors from the string
                 project["build"]["errortypes"] = []
                 # print("\nstarting error analysis for {}".format(name))

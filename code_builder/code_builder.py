@@ -26,7 +26,7 @@ import shutil
 from .statistics import Statistics
 from .database import get_database
 from .build_systems.build_systems import recognize_and_build
-from .utils.driver import open_logfiles, recursively_get_files, recursively_get_dirs
+from .utils.driver import open_logfiles, recursively_get_files, recursively_get_files_containing
 
 init = False
 loggers = None
@@ -74,15 +74,44 @@ def get_dir_size(start_path):
 
     return total_size, file_count
 
-def send_to_spclstorage(ctx, project_name, build_dir, ast_dir, bitcodes_dir, project):
+def remove_files_with_ext(dir, ext):
+    files = recursively_get_files(dir, ext)
     nr_removed_files = 0
-    # ast_files_in_build = glob.glob(join(build_dir, "**/*.ast"), recursive = True)
-    ast_files_in_build = recursively_get_files(build_dir, ".ast")
-    for ast_file in ast_files_in_build:
-        if exists(ast_file):
-            os.remove(ast_file)
+    for file in files:
+        if exists(file):
+            os.remove(file)
             nr_removed_files += 1
-    print(f"Removed {nr_removed_files} AST files from build directory. Glob reported {len(ast_files_in_build)} ASTs")
+    if nr_removed_files > 0:
+        print(f"Removed {nr_removed_files} {ext} files from build directory. Glob reported {len(files)} {ext}")
+
+    return nr_removed_files
+
+def remove_files_containing(dir, substr):
+    files = recursively_get_files_containing(dir, substr)
+    nr_removed_files = 0
+    for file in files:
+        if exists(file):
+            os.remove(file)
+            nr_removed_files += 1
+    if nr_removed_files > 0:
+        print(f"Removed {nr_removed_files} files containing {substr} from build directory. Glob reported {len(files)} files")
+
+    return nr_removed_files
+
+def clean_build_dir(build_dir):
+    nr_removed_files = 0
+    EXTENSIONS_TO_REMOVE = [".ast", ".bc", ".png", ".jpg", ".jpeg", ".rar", ".zip", ".7z", ".tar", ".gz", ".wav", ".mp3", ".mp4", ".o", ".a", ".html", ".css", ".svg", ".sh", ".make", ".txt", ".md", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".json", ".xml", ".yaml", ".yml", ".csv", ".tsv", ".sql", ".py", ".pyc", ".pyo", ".pyd", ".jar", ".war", ".ear", ".so", ".dll", ".exe", ".bat", ".cmd", ".ps1", ".psm1", ".psd1", ".ps1xml", ".pssc", ".psc1", ".pssc"]
+    for ext in EXTENSIONS_TO_REMOVE:
+        nr_removed_files += remove_files_with_ext(build_dir, ext)
+    
+    # clean .so files that have version number after .so
+    nr_removed_files += remove_files_containing(build_dir, ".so.")
+    
+    return nr_removed_files
+
+def send_to_remote_server(ctx, project_name, build_dir, ast_dir, bitcodes_dir, project):
+    # nr_removed_files = clean_build_dir(build_dir)
+    nr_removed_files = 0
 
     # the temporary file gets deleted when it gets garbage collected
     with tempfile.NamedTemporaryFile(suffix='.tar.gz') as f:
@@ -96,20 +125,49 @@ def send_to_spclstorage(ctx, project_name, build_dir, ast_dir, bitcodes_dir, pro
             #     tar.add(name = project["build"]["temp_build_dir"], arcname = basename(project["build"]["temp_build_dir"]))
 
         f.flush()
-        f.seek(0)
+        # f.seek(0)
         
-        USER = 'cdragancea'
-        c = Connection(host = 'spclstorage.inf.ethz.ch', user = USER)
-        c.run(f'mkdir -p /home/{USER}/runs_archived/run_{ctx.cfg["output"]["time"]}')
-        c.put(f.name, remote = f'/home/{USER}/runs_archived/run_{ctx.cfg["output"]["time"]}/{project_name}.tar.gz')
+        # USER = 'cdragancea'
+        # c = Connection(host = 'spclstorage.inf.ethz.ch', user = USER)
+        c = Connection(host = ctx.cfg["remote"]["host"], user = ctx.cfg["remote"]["user"])
+
+        # c.run(f'mkdir -p /home/{USER}/runs_archived/run_{ctx.cfg["output"]["time"]}')
+        c.run(f'mkdir -p {ctx.cfg["remote"]["artifacts_target_folder"]}/run_{ctx.cfg["output"]["time"]}')
+        # c.put(f.name, remote = f'/home/{USER}/runs_archived/run_{ctx.cfg["output"]["time"]}/{project_name}.tar.gz')
+        
+        exception_flag = False
+        try:
+            c.put(f.name, remote = f'{ctx.cfg["remote"]["artifacts_target_folder"]}/run_{ctx.cfg["output"]["time"]}/{project_name}.tar.gz')
+            print(f"Copied {f.name} to remote storage server as {ctx.cfg['remote']['artifacts_target_folder']}/run_{ctx.cfg['output']['time']}/{project_name}.tar.gz")
+        except Exception as e:
+            # There is some weird PermissionError happening even though the file was actually copied to the remote server
+
+            remote_file_size = int(c.run(f"stat -c %s {ctx.cfg['remote']['artifacts_target_folder']}/run_{ctx.cfg['output']['time']}/{project_name}.tar.gz", hide = True).stdout.strip())
+            local_file_size = os.path.getsize(f.name)
+
+            if remote_file_size != local_file_size:
+                exception_flag = True
+
+                print("Failed to upload build artifacts to remote storage server")
+                print(f"src = {f.name} dst = {ctx.cfg['remote']['artifacts_target_folder']}/run_{ctx.cfg['output']['time']}/{project_name}.tar.gz")
+
+                shutil.copyfile(f.name, f'/home/cdragancea/{project_name}_{ctx.timestamp}.tar.gz')
+                print(f"Exception: {e}")
+                print(f"Traceback: {traceback.format_exc()}")
+
         # c.run(f'tar -xf /home/{USER}/{project_name}_{ctx.timestamp}.tar.gz -C /home/{USER}/runs/')
         # c.run(f'rm /home/{USER}/{project_name}_{ctx.timestamp}.tar.gz')
-    
+    if exception_flag:
+        raise Exception("Failed to upload build artifacts to remote storage server")
+
+
+    print(f"Uploaded {project_name} to remote storage server")
     return nr_removed_files
 
 def download_and_build(
     cloner, idx, name, project, target_dir, build_dir, ctx, stats, running_builds
 ):
+    print(f"Entered download and build for project: {name}")
     running_builds[multiprocessing.current_process().name] = (idx, name)
     print("| ", end="")
     print("\n| ".join("{}\t{}".format(k, v) for k, v in running_builds.items()))
@@ -168,8 +226,8 @@ def download_and_build(
     bitcodes_dir = join(target_dir, name, "bitcodes")
     # features_dir = join(target_dir, "features", name)
 
-    if ctx.cfg["build"]["store_to_spclstorage"] == "True":
-        nr_asts = send_to_spclstorage(ctx, name, proj_build_dir, ast_dir, bitcodes_dir, project)
+    if ctx.cfg["build"]["store_to_remote_server"] == "True":
+        nr_asts = send_to_remote_server(ctx, name, proj_build_dir, ast_dir, bitcodes_dir, project)
         if "build" in new_project:
             new_project["build"]["nr_asts"] = nr_asts
         
@@ -177,15 +235,17 @@ def download_and_build(
         # shutil.rmtree(proj_build_dir, ignore_errors=True)
         # recursively delete files in the build folder except the logs
         # all_files = glob.glob(join(proj_build_dir, "**/*"), recursive = True)
-        all_files = recursively_get_files(proj_build_dir)
+        # all_files = recursively_get_files(proj_build_dir)
+        all_files = os.listdir(proj_build_dir)
         for file in all_files:
-            if not os.path.exists(file):
+            full_filename = join(proj_build_dir, file)
+            if not os.path.exists(full_filename):
                 continue
-            if not file.endswith(".log"):
-                if isdir(file):
-                    shutil.rmtree(file, ignore_errors=True)
+            if not full_filename.endswith(".log"):
+                if isdir(full_filename):
+                    shutil.rmtree(full_filename, ignore_errors=True)
                 else:
-                    os.remove(file)
+                    os.remove(full_filename)
         shutil.rmtree(ast_dir, ignore_errors=True)
         shutil.rmtree(bitcodes_dir, ignore_errors=True)
         # shutil.rmtree(features_dir, ignore_errors=True)
@@ -240,18 +300,18 @@ def build_projects(
     running_builds = manager.dict()
     running_builds["builds_left"] = projects_count
 
-    with open("all_built.json", "r") as fin:
-        previous_all_repositories = json.load(fin)
+    previous_all_repositories = dict()
+    if exists("all_built.json"):
+        with open("all_built.json", "r") as fin:
+            previous_all_repositories = json.load(fin)
     
-    with open("intermediate_all_built.json", "r") as fin:
-        temp_data = json.load(fin)
-        previous_all_repositories.update(temp_data)
     
-    all_built_lock = manager.Lock()
-
+    if exists("intermediate_all_built.json"):
+        with open("intermediate_all_built.json", "r") as fin:
+            temp_data = json.load(fin)
+            previous_all_repositories.update(temp_data)
+    
     with concurrent.futures.ProcessPoolExecutor(threads_count) as pool:
-        projects = []
-
         database_processers = []
         # we need an instance of the statistics class for the dependency analysis
         # when we build twice
@@ -266,15 +326,17 @@ def build_projects(
             # indices = list(range(repositories_idx + 1, repositories_idx + repo_count + 1))
             # idx = indices[0]
 
-            for name, proj in random.sample(list(repositories.items()), len(list(repositories.items()))):
-                if name in previous_all_repositories:# and (previous_all_repositories[name]["status"] == "success"
-                                                      #    or previous_all_repositories[name]["status"] == "have archive"
-                                                       #   or ("build" in previous_all_repositories[name] and previous_all_repositories[name]["build"].get("build", "") == "success")):
-                    # all_repositories[name] = previous_all_repositories[name]
+            projects_to_build = random.sample(list(repositories.items()), len(list(repositories.items())))
+            futures = []
+            idx_in_source = 0
+
+            while len(futures) < min(threads_count, len(projects_to_build)) and idx_in_source < len(projects_to_build):
+                name, proj = projects_to_build[idx_in_source]
+                if name in previous_all_repositories:
+                    idx_in_source += 1
                     idx += 1
                     running_builds["builds_left"] -= 1
                     continue
-
                 future = pool.submit(
                     initializer_func,
                     ctx,
@@ -291,29 +353,119 @@ def build_projects(
                         running_builds,
                     ),
                 )
-                projects.append(future)
+                futures.append(future)
                 idx += 1
-            repositories_idx += repo_count
-        print("submitted {} tasks to queue".format(idx))
-        # for project in concurrent.futures.as_completed(futures):
-        for project in projects:
-            idx, key, val = project.result()
-            all_repositories[key] = val
-            previous_all_repositories[key] = val
-            print(f"Got back the result of the {key} project future. Writing to file...")
+                idx_in_source += 1
+            
+            while running_builds["builds_left"] > 0:
+                completed_futures, _ = concurrent.futures.wait(futures, return_when=concurrent.futures.FIRST_COMPLETED)
 
-            all_built_lock.acquire()
-            with open("intermediate_all_built.json", "w") as o:
-                o.write(json.dumps(previous_all_repositories, indent = 2))
-            all_built_lock.release()
+                for future in completed_futures:
+                    future_idx, future_name, future_project = future.result()
+                    futures.remove(future)
 
-            # if running_builds["builds_left"] % 5 == 0:
-            # print(f"Builds left: {running_builds['builds_left']}")
+                    all_repositories[future_name] = future_project
+                    previous_all_repositories[future_name] = future_project
+                    print(f"Got back the result of the {future_name} project future. Writing to file...")
 
-            # builds_left -= 1
-            # print("{} builds left".format(builds_left))
-        end = time()
-        print("Process repositorites in %f [s]" % (end - start))
+                    with open("intermediate_all_built.json", "w") as o:
+                        o.write(json.dumps(previous_all_repositories, indent = 2))
+
+                    if running_builds["builds_left"] % 5 == 0:
+                        print(f"Builds left: {running_builds['builds_left']}")
+
+                    start_stats_update = time()
+                    try:
+                        print(f"[{future_idx}/{projects_count}] stats for {future_name}")
+                        stats.update(future_project, future_name)
+                    except Exception as e:
+                        print("Error updating stats: {}".format(e))
+                    
+                    if not isdir(log_dir):
+                        makedirs(log_dir)
+                    timestamp = cfg["output"]["time"]
+                    stats.save_rebuild_json(log_dir, timestamp)
+                    stats.save_errors_json()
+                    stats.save_errorstat_json(log_dir, timestamp)
+                    stats.save_dependencies_json(log_dir, timestamp)
+    
+                    end_stats_update = time()
+                    print(f"Stats update for {future_name} took {end_stats_update - start_stats_update} seconds")
+
+                while idx_in_source < len(projects_to_build) and len(futures) < threads_count:
+                    name, proj = projects_to_build[idx_in_source]
+                    if name in previous_all_repositories:
+                        idx_in_source += 1
+                        idx += 1
+                        running_builds["builds_left"] -= 1
+                        continue
+                    futures.append(pool.submit(
+                        initializer_func,
+                        ctx,
+                        download_and_build,
+                        (
+                            db_processor,
+                            idx,
+                            name,
+                            proj,
+                            target_dir,
+                            build_dir,
+                            ctx,
+                            temporary_stats,
+                            running_builds,
+                        ),
+                    ))
+                    idx += 1
+                    idx_in_source += 1
+
+        #     for name, proj in projects_to_build[:threads_count]:
+        #         if name in previous_all_repositories:# and (previous_all_repositories[name]["status"] == "success"
+        #                                               #    or previous_all_repositories[name]["status"] == "have archive"
+        #                                                #   or ("build" in previous_all_repositories[name] and previous_all_repositories[name]["build"].get("build", "") == "success")):
+        #             # all_repositories[name] = previous_all_repositories[name]
+        #             idx += 1
+        #             running_builds["builds_left"] -= 1
+        #             continue
+
+        #         future = pool.submit(
+        #             initializer_func,
+        #             ctx,
+        #             download_and_build,
+        #             (
+        #                 db_processor,
+        #                 idx,
+        #                 name,
+        #                 proj,
+        #                 target_dir,
+        #                 build_dir,
+        #                 ctx,
+        #                 temporary_stats,
+        #                 running_builds,
+        #             ),
+        #         )
+        #         projects.append(future)
+        #         idx += 1
+        #     repositories_idx += repo_count
+        # print("submitted {} tasks to queue".format(idx))
+        # # for project in concurrent.futures.as_completed(futures):
+        # for project in projects:
+        #     idx, key, val = project.result()
+        #     all_repositories[key] = val
+        #     previous_all_repositories[key] = val
+        #     print(f"Got back the result of the {key} project future. Writing to file...")
+
+        #     all_built_lock.acquire()
+        #     with open("intermediate_all_built.json", "w") as o:
+        #         o.write(json.dumps(previous_all_repositories, indent = 2))
+        #     all_built_lock.release()
+
+        #     # if running_builds["builds_left"] % 5 == 0:
+        #     # print(f"Builds left: {running_builds['builds_left']}")
+
+        #     # builds_left -= 1
+        #     # print("{} builds left".format(builds_left))
+    end = time()
+    print("Process repositorites in %f [s]" % (end - start))
     start = time()
     
     with open("all_built.json", "w") as o:
@@ -327,23 +479,22 @@ def build_projects(
         tries = 0
         while saved and tries < 5:
             try:
-                USER = 'cdragancea'
-                c = Connection(host = 'spclstorage.inf.ethz.ch', user = USER)
-                c.put(o.name, remote = f'/home/{USER}/runs_archived/run_{ctx.cfg["output"]["time"]}/build_summary.json')
+                c = Connection(host = ctx.cfg["remote"]["host"], user = ctx.cfg["remote"]["user"])
+                c.put(o.name, remote = f'{ctx.cfg["remote"]["artifacts_target_folder"]}/run_{ctx.cfg["output"]["time"]}/build_summary.json')
                 saved = True
             except:
                 tries += 1
                 sleep(1)
         
         if saved is False:
-            print("Failed to save build summary to spclstorage")
+            print("Failed to save build summary to remote storage server")
 
-    try:
-        for (i, (name, proj)) in enumerate(all_repositories.items()):
-            print("[{}/{}] stats for {}".format(i, projects_count, name))
-            stats.update(proj, name)
-    except Exception as e:
-        print("Error updating stats: {}".format(e))
+    # try:
+    #     for (i, (name, proj)) in enumerate(all_repositories.items()):
+    #         print("[{}/{}] stats for {}".format(i, projects_count, name))
+    #         stats.update(proj, name)
+    # except Exception as e:
+    #     print("Error updating stats: {}".format(e))
     print()
     end = time()
     print("Process repositorites in %f [s]" % (end - start))

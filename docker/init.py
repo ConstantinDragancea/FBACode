@@ -36,11 +36,50 @@ def print_section(idx, ctx, message):
     ctx.out_log.print_info(idx, to_print)
     print(to_print)
 
+def save_compile_commands(build_dir):
+    with open(os.path.join(build_dir, "ast-emit.log"), "r") as fin:
+        content = fin.read().strip()
+
+    lines = content.split("\n")
+    lines = [x.strip() for x in lines]
+
+    print(len(lines))
+
+    compile_commands = []
+    for i in range(0, len(lines), 2):
+        current_command = dict()
+        current_command["directory"] = lines[i + 1]
+        current_command["file"] = lines[i].split()[-1]
+        current_command["arguments"] = lines[i].split()[:-1]
+        ast_basename = '.'.join(current_command["file"].split('.')[:-1]) + '.ast'
+        output_file_path = os.path.abspath(os.path.join(current_command["directory"], ast_basename))
+        output_file_path = '/home/fba_code/AST/' + '/'.join(output_file_path.split('/')[4:])
+        current_command["output"] = output_file_path
+        compile_commands.append(current_command)
+
+    compile_commands[0]
+    with open(os.path.join(build_dir, "compile_commands.json"), "w") as fout:
+        json.dump(compile_commands, fout, indent = 4)
+
+def save_compile_commands2(build_dir):
+    with open(os.path.join(build_dir, "compile_commands.log"), "r") as fin:
+        lines = fin.read().strip().split('\n')
+    
+    # remove the , on the last line
+    if len(lines) > 0:
+        lines[-1] = lines[-1][:-1]
+
+    json_str = '[' + '\n'.join(lines) + ']'
+    lol_obj = json.loads(json_str)
+    
+    with open(os.path.join(build_dir, "compile_commands.json"), "w") as fout:
+        json.dump(lol_obj, fout, indent = 4)
 
 source_dir = f"{DOCKER_MOUNT_POINT}/source"
 build_dir = f"{DOCKER_MOUNT_POINT}/build"
 bitcodes_dir = f"{DOCKER_MOUNT_POINT}/bitcodes"
 ast_dir = f"{DOCKER_MOUNT_POINT}/AST"
+headers_dir = f"{DOCKER_MOUNT_POINT}/relevant_headers"
 # features_dir = f"{DOCKER_MOUNT_POINT}/features"
 dependency_map = f"{DOCKER_MOUNT_POINT}/dep_mapping.json"
 build_system = os.environ.get("BUILD_SYSTEM", "")
@@ -70,11 +109,12 @@ chown_dirs = [build_dir, source_dir]
 cfg = {"output": {"verbose": verbose, "file": f"{DOCKER_MOUNT_POINT}/"}}
 ctx = Context(cfg)
 timestamp = datetime.now().strftime("%Y_%m_%d_%H_%M_%S")
-loggers = open_logfiles(cfg, name.replace("/", "_"), timestamp=timestamp)
+loggers = open_logfiles(cfg, name.replace("/", "_"), timestamp = timestamp)
 ctx.set_loggers(loggers.stdout, loggers.stderr)
+
 # save all installed packages, to get the difference later (newly installed deps)
 # assusmes we run debian or ubuntu, maybe put into library in the future
-out = run(["dpkg", "--get-selections"], stderr=PIPE, stdout=PIPE)
+out = run(["dpkg", "--get-selections"], capture_output = True, text = True)
 preinstalled_pkgs = out.stdout.splitlines()
 preinstalled_pkgs = [
     i.replace("install", "").strip() for i in preinstalled_pkgs if "deinstall" not in i
@@ -194,11 +234,15 @@ else:
             project["ast_files"] = {"dir": external_ast_dir}
             builder.generate_ast(ast_dir)
             chown_dirs.append(ast_dir)
+        # if os.environ.get("SAVE_HEADERS") != "False":
+        #     project["relevant_headers"] = {"dir": headers_dir}
+        #     builder.save_header_files(headers_dir)
+        #     chown_dirs.append(headers_dir)
 project["build"]["build_time"] = end - start
 ctx.out_log.print_info(idx, "Finish processing %s in %f [s]" % (name, end - start))
 
 # get installed packages after build
-out = run(["dpkg", "--get-selections"], stderr=PIPE, stdout=PIPE)
+out = run(["dpkg", "--get-selections"], capture_output = True, text = True)
 installed_pkgs = out.stdout.splitlines()
 installed_pkgs = [
     i.replace("install", "").strip() for i in installed_pkgs if "deinstall" not in i
@@ -208,6 +252,87 @@ project["build"]["installed"].extend(new_pkgs)
 
 if builder.temp_build_dir is not None:
     project["build"]["temp_build_dir"] = builder.temp_build_dir
+
+# save_compile_commands2(build_dir)
+# copyfile(os.path.join(build_dir, "compile_commands.json"), os.path.join(ast_dir, "compile_commands.json"))
+
+# with open(os.path.join(build_dir, "shared", "compile_commands.json"), "r") as fin:
+#     shared_compile_commands = json.load(fin)
+# new_shared_compile_commands = []
+# for cc in shared_compile_commands:
+#     cc["output"] = cc["output"].replace(".cc.o", ".ast")
+#     command_str = cc["command"].split()
+#     new_command_str = []
+#     skip_next = False
+#     for cc_part in command_str:
+#         if skip_next:
+#             skip_next = False
+#             continue
+#         if cc_part == "-o":
+#             skip_next = True
+#             continue
+#         new_command_str.append(cc_part)
+#     cc["command"] = ' '.join(new_command_str)
+#     new_shared_compile_commands.append(cc)
+# with open(os.path.join(build_dir, "shared", "compile_commands.json"), "w") as fout:
+#     json.dump(new_shared_compile_commands, fout, indent = 4)
+
+# os.mkdir(os.path.join(build_dir, "temp-analyze-shared"))
+# os.mkdir(os.path.join(build_dir, "temp-analyze-static"))
+j = os.environ.get("JOBS", 1)
+cmd = f"cxx-langstat -analyses=ala,cla,lka,msa,tpa,ua,ula,vta,mka,cta -emit-features -indir {ast_dir} -outdir {build_dir}/temp-analyze -j {j} --".split()
+ret = run(cmd, cwd=DOCKER_MOUNT_POINT, capture_output = True, text = True) #TODO: switch the stdout to None to get the output in the container
+
+print(f"cxx-langstat retcode: {ret.returncode}")
+print(f"cxx-langstat -emit-features stdout: {ret.stdout}")
+print(f"cxx-langstat -emit-features stderr: {ret.stderr}")
+
+# copyfile(os.path.join(build_dir, "compile_commands.json"), os.path.join(build_dir, "static", "compile_commands.json"))
+# cmd = f"cxx-langstat -analyses=ala,cla,lka,msa,tpa,ua,ula,vta,mka,cta -emit-features -indir {build_dir}/static -outdir {build_dir}/temp-analyze-static -j {j} --".split()
+
+# analyze_features_start = time()
+# ret = run(cmd, cwd=DOCKER_MOUNT_POINT, capture_output = True, text = True) #TODO: switch the stdout to None to get the output in the container
+# analyze_features_end = time()
+
+# print(f"cxx-langstat second run retcode: {ret.returncode}")
+# print(f"cxx-langstat second run -emit-features stdout: {ret.stdout}")
+# print(f"cxx-langstat second run -emit-features stderr: {ret.stderr}")
+
+
+# # Save the referenced AST files
+# project["relevant_header_files_mapping"] = dict()
+# with open(os.path.join(build_dir, "header_dependencies.log"), "r") as fin:
+#     header_dependencies_content = fin.read()
+#     header_dependencies_content = header_dependencies_content.strip().split('\\\n')
+#     header_dependencies_content = [x.strip() for x in header_dependencies_content]
+
+#     new_header_dependencies_content = []
+
+#     for line in header_dependencies_content:
+#         new_header_dependencies_content += line.split()
+
+#     header_dependencies_content = [x.strip() for x in new_header_dependencies_content]
+#     # normalize the paths
+#     header_dependencies_content = [os.path.normpath(x) for x in header_dependencies_content]
+#     header_dependencies_content = [os.path.abspath(x) for x in header_dependencies_content]
+#     header_dependencies_content = list(set(header_dependencies_content))
+
+#     print(f"Found {len(header_dependencies_content)} header files that should be saved")
+
+#     header_idx = 0
+#     for header_path in header_dependencies_content:
+#         if not os.path.exists(header_path):
+#             print("Header file does not actually exist: {}".format(header_path))
+#             continue
+            
+#         project["relevant_header_files_mapping"][header_idx] = header_path
+#         copyfile(header_path, os.path.join(headers_dir, str(header_idx)), follow_symlinks=True)
+#         header_idx += 1
+
+#         if header_idx % 50 == 0:
+#             print(f"Saved {header_idx} header files")
+
+# chown_dirs.append(headers_dir)
 
 out = {"idx": idx, "name": name, "project": project}
 # save output JSON

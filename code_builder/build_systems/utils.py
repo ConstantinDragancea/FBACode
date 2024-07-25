@@ -11,15 +11,14 @@ def decode(stream):
         return stream
 
 
-def run(command, cwd=None, stdout=None, stderr=None) -> CompletedProcess:
+def run(command, cwd=None, capture_output = False, text = False, stdout = None, stderr = None) -> CompletedProcess:
     # Python 3.5+ - subprocess.run
     # older - subprocess.call
     # TODO: capture_output added in 3.7 - verify it works
-    print("running '{}'".format(command))
-    if version_info.major >= 3 and version_info.minor >= 5:
-        out = subprocess.run(command, cwd=cwd, stdout=stdout, stderr=stderr)
+    if version_info.major >= 3 and version_info.minor >= 7:
+        out = subprocess.run(command, cwd=cwd, capture_output = capture_output, text = text)
         return CompletedProcess(
-            out.args, out.returncode, decode(out.stdout), decode(out.stderr)
+            out.args, out.returncode, stdout = decode(out.stdout), stderr = decode(out.stderr)
         )
     else:
         code = 0

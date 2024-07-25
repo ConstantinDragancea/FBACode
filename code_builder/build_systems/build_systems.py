@@ -22,11 +22,13 @@ from ..ci_systems import travis, circle_ci, gh_actions, debian_install, conan_in
 
 DOCKER_MOUNT_POINT = "/home/fba_code"
 
-def run(command, cwd=None, stdout=None, stderr=None):
+def run(command, cwd=None, stdout=None, stderr=None, capture_output=False, text=False):
 
     # Python 3.5+ - subprocess.run
     # older - subprocess.call
     # TODO: capture_output added in 3.7 - verify it works
+    if version_info.major >= 3 and version_info.minor >= 7:
+        return subprocess.run(command, cwd=cwd, capture_output=capture_output, text=text)
     if version_info.major >= 3 and version_info.minor >= 5:
         return subprocess.run(command, cwd=cwd, stdout=stdout, stderr=stderr)
     else:

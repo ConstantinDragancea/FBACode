@@ -98,11 +98,15 @@ def decode(stream):
     else:
         return stream
     
-def run(command, cwd=None, stdout=None, stderr=None) -> CompletedProcess:
+def run(command, cwd=None, stdout=None, stderr=None, capture_output = False, text = False) -> CompletedProcess:
     # Python 3.5+ - subprocess.run
     # older - subprocess.call
     # TODO: capture_output added in 3.7 - verify it works
-    print("running '{}'".format(command))
+    if version_info.major >= 3 and version_info.minor >= 7:
+        out = subprocess.run(command, cwd=cwd, capture_output=capture_output, text=True)
+        return CompletedProcess(
+            out.args, out.returncode, stdout=decode(out.stdout), stderr=decode(out.stderr)
+        )
     if version_info.major >= 3 and version_info.minor >= 5:
         out = subprocess.run(command, cwd=cwd, stdout=stdout, stderr=stderr)
         return CompletedProcess(
@@ -117,12 +121,20 @@ def run(command, cwd=None, stdout=None, stderr=None) -> CompletedProcess:
             out = e.output
             return CompletedProcess(command, code, stderr=decode(out))
         return CompletedProcess(command, code, stdout=decode(out))
-    
+
 def recursively_get_files(directory, ext = ""):
     files = []
     for root, dirs, filenames in os.walk(directory):
         for filename in filenames:
             if filename.endswith(ext):
+                files.append(path.join(root, filename))
+    return files
+
+def recursively_get_files_containing(directory, substr = ""):
+    files = []
+    for root, dirs, filenames in os.walk(directory):
+        for filename in filenames:
+            if substr in filename:
                 files.append(path.join(root, filename))
     return files
 

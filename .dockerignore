@@ -24,3 +24,6 @@ bitcodes
 fbacode-virtualenv/
 examples
 *.md
+
+4300_analyze/
+analyze/
