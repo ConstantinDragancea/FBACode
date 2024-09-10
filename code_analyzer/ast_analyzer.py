@@ -387,20 +387,21 @@ def analyze_projects(path_to_collection, ast_archive_root, results_dir_root, pro
         print(f"len of projects info in the beginning: {len(projects_info_as_list)}")
 
         # PROJECT_BLACKLIST = ["telegram", "ball", "cmake", "trilinos", "ifcplus", "kicad", "quantlib", "cvc4", "gthumb", "meshlab", "klayout", "digikam", "vtk9", "cegui-mk2", "qt6-declarative", "nodejs", "dart", "akonadi", "blis", "qbittorrent", "gtk3", "regina", "ceres", "dolphin"]
-        # PROJECT_BLACKLIST = ["trilinos"]
+        # PROJECT_BLACKLIST = ["ffmpeg"]
         # PROJECT_WHITELIST = ["libpcap", "qmmp", "netsurf"]
-        PROJECT_WHITELIST = ["abseil", "actor-framework"]
-        # projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if not any([blacklisted in pname for blacklisted in PROJECT_BLACKLIST])]
+        # PROJECT_WHITELIST = ["librsb", "r-cran-treespace", "stax", "mozjs102", "odb", "f3d", "kicad", "libjama", "clblast", "aseba", "catch2", "nlohmann-json3", "warzone2100", "libdivide", "opencv", "logiops", "geos", "r-cran-rstanarm", "ros-diagnostics", "horizon-eda", "fcitx5", "v4l-utils", "watchman", "primesieve", "gdal", "aspcud", "r-cran-s2", "gemmi", "octave", "keyman", "onednn", "capnproto", "fastani", "minizinc", "ares", "scitokens-cpp", "r-cran-intervals", "dvisvgm", "transfuse", "librandom123", "spaced", "golang-github-bep-golibsass", "trafficserver", "opm-common", "plink1.9", "coz-profiler", "actor-framework", "r-cran-plogr", "rsymphony", "libsass", "opentracing-cpp", "lerc", "simgrid", "lnav", "segyio", "libwebm", "libcifpp", "visp", "libargs", "dwz", "gromacs", "flexc++", "draco", "protozero", "indi", "spectra", "spirv-tools", "libosmium", "rudecgi", "intel2gas", "wala", "libvbz-hdf-plugin", "jsonnet", "zxing-cpp", "scythestat", "osmium-tool", "protobuf", "openttd", "tao-json", "augustus", "therion", "proj", "kodi-game-libretro", "poco", "libwildmagic", "googletest", "embree", "ffmpeg", "cadabra2", "ns3", "r-cran-projpred", "libvpx", "seqan2", "bmagic", "waylandpp", "restinio", "trilinos", "tao-pegtl", "welle.io", "stella", "cunit", "renderdoc", "collada2gltf", "r-cran-sass", "abseil", "libfilezilla", "timg", "recoll", "wdq2wav", "gringo"]
+        # PROJECT_WHITELIST = ["octave", "opencv", "ffmpeg", "r-cran-protobuf"]
+        PROJECT_WHITELIST = ["pbbam"]
+        # projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if not any([blacklisted == pname for blacklisted in PROJECT_BLACKLIST])]
         # projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if "hypre" in pname]
-        projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if any([whitelisted in pname for whitelisted in PROJECT_WHITELIST])]
+        projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if any([(whitelisted == pname) for whitelisted in PROJECT_WHITELIST])]
+
 
         projects_info_as_list = [(project_name, project) for (project_name, project) in projects_info_as_list if project["status"] == "success" and \
                     (project_name not in analyze_summary or analyze_summary[project_name]["analysis"] != "success")]
         
-        # projects_info_as_list = [(pname, pp) for (pname, pp) in projects_info_as_list if "abseil" in pname]
-        
         # projects_info_as_list = [(project_name, project) for (project_name, project) in projects_info_as_list if "nr_asts" in project["build"] and project["build"]["nr_asts"] > 0]
-        projects_info_as_list = [(project_name, project) for (project_name, project) in projects_info_as_list if ("archive_size" in project and project["archive_size"] < 10 * 1024 * 1024 * 1024) or "archive_size" not in project]
+        # projects_info_as_list = [(project_name, project) for (project_name, project) in projects_info_as_list if ("archive_size" in project and project["archive_size"] < 10 * 1024 * 1024 * 1024) or "archive_size" not in project]
 
         random.shuffle(projects_info_as_list)
         jobs_left = len(projects_info_as_list)

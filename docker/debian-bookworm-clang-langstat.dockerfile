@@ -1,10 +1,8 @@
 ARG CLANG_VERSION
 # TODO: remove test
 FROM spcleth/fbacode:debian-bookworm-clang-base-test-${CLANG_VERSION}
-ARG CLANG_VERSION
-# ENV CLANG_VERSION=${CLANG_VERSION}
-COPY --from=spcleth/fbacode:debian-bookworm-clang-base-beta-18 /opt/source/ClangToolExtractSourceFiles /opt/source/ClangToolExtractSourceFiles
 
+ARG CLANG_VERSION
 RUN echo "building image for clang version ${CLANG_VERSION}"
 
 # do not run tests on builds (does not work for all pkgs)
@@ -18,13 +16,23 @@ ARG soft="python3 make texinfo build-essential fakeroot devscripts dh-make git p
 RUN apt-get update 
 RUN apt-get install -y ${deps} --no-install-recommends
 RUN apt-get install -y ${soft} --no-install-recommends
-# RUN apt-get purge -y --auto-remove ${deps}
+RUN apt-get purge -y --auto-remove ${deps}
 
 
 ENV HOME_DIR /home/fba_code/
 ENV SRC_DIR ${HOME_DIR}/code
 ENV BUILD_DIR ${HOME_DIR}/build
 ENV BITCODES_DIR ${HOME_DIR}/bitcodes
+
+# install cxx-langstat from einstein local source code
+RUN mkdir -p /opt/source/
+ADD cxx-langstat /opt/source/cxx-langstat
+ENV CXX_LANGSTAT_PROJECT_PATH=/opt/source/cxx-langstat
+RUN mkdir -p ${CXX_LANGSTAT_PROJECT_PATH}/build && cd ${CXX_LANGSTAT_PROJECT_PATH}/build && rm -rf ./* && cmake -G "Ninja" -DCMAKE_CXX_COMPILER=clang++-${CLANG_VERSION} -DCMAKE_MAKE_PROGRAM=ninja -DCMAKE_C_COMPILER=clang-${CLANG_VERSION} -DCLANG_DIR=/usr/lib/llvm-${CLANG_VERSION}/lib/cmake/clang ../ && ninja
+
+RUN cp ${CXX_LANGSTAT_PROJECT_PATH}/build/cxx-langstat /usr/lib/llvm-${CLANG_VERSION}/bin
+RUN ln -fs /usr/lib/llvm-${CLANG_VERSION}/bin/cxx-langstat /usr/bin/cxx-langstat
+RUN mkdir -p ${HOME_DIR}/analyze
 
 # set the environment variables for c/cxx
 # ENV CC ${HOME_DIR}/wrappers/clang
@@ -49,7 +57,6 @@ RUN apt search '^gcc-[0-9]*[.]*[0-9]*$' | grep -o '\bgcc[a-zA-Z0-9:_.-]*' |\
   xargs -I {} echo "{}" hold | dpkg --set-selections
 
 RUN mkdir -p ${HOME_DIR}
-# RUN mkdir -p ${HOME_DIR}/build/header_dependencies
 WORKDIR ${HOME_DIR}
 ADD code_builder/__init__.py code_builder/__init__.py
 ADD docker/init.py init.py
@@ -69,14 +76,9 @@ RUN ln -fs ${HOME_DIR}/wrappers/clang /usr/bin/cc\
   && ln -fs ${HOME_DIR}/wrappers/clang++ /usr/bin/g++
 
 # replace all version of gcc
-RUN cd ${HOME_DIR}/wrappers && ./replace_compilers.sh 4.6 4.7 4.8 4.9 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19
+RUN cd ${HOME_DIR}/wrappers && ./replace_compilers.sh 4.6 4.7 4.8 4.9 5 6 7 8 9 10 11 12 13
 
-RUN ln -fs /opt/source/ClangToolExtractSourceFiles/build/extract-source-files /usr/bin/extract-source-files
 
-# Block future installations of clang, such as to not override the wrappers
-# TODO: should we also block llvm installations?
-# COPY docker/block-clang.pref /etc/apt/preferences.d/block-clang.pref
-# RUN apt-get update
 
 # Check if gcc, g++ & cpp are actually clang
 # RUN gcc --version|grep clang > /dev/null || exit 1

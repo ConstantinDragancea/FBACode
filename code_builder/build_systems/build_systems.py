@@ -120,6 +120,7 @@ def start_docker(
         "JOBS={}".format(str(ctx.cfg["build"]["jobs"])),
         "SAVE_IR={}".format(str(ctx.cfg["build"]["save_ir"])),
         "SAVE_AST={}".format(str(ctx.cfg["build"]["save_ast"])),
+        "SAVE_HEADERS={}".format(str(ctx.cfg["build"]["save_headers"]))
     ]
     container = docker_client.containers.run(
         dockerfile,
@@ -173,6 +174,12 @@ def start_docker(
             reload_fail += 1
     # just use this to get exit code
     return_code = container.wait()
+    ctx.out_log.print_info(
+        idx,
+        "Project {} in container {} finished with return code:{}".format(
+            name, container.name, return_code["StatusCode"]
+        ),
+    )
     if return_code["StatusCode"]:
         # the init.py or the docker container crashed unexpectadly
         ctx.err_log.print_error(
@@ -327,30 +334,30 @@ def recognize_and_build(idx, name, project, build_dir, target_dir, ctx, stats=No
                 project["is_first_build"] = False
                 start_docker(idx, name, project, ctx, **docker_conf)
             # the build failed, let's try again with missing pkgs data
-            if (
-                project["status"] != "crash"
-                and project["status"] != "success"
-                and "build" in project
-                and ctx.cfg["build"]["install_deps"] == "True"
-            ):
-                end = time()
-                if "build" in project:
-                    project["build"]["time"] = end - start
-                if stats is None:
-                    stats = Statistics(1)
-                # set first build to true, so the analyzer doesn't save stats
-                project["is_first_build"] = True
-                stats.update(project, name, final_update=False)
-                if project["build"]["missing_dependencies"] != []:
-                    project["missing_deps"] = copy.deepcopy(
-                        project["build"]["missing_dependencies"]
-                    )
-                    project["install_deps"] = True
-                    project["first_build"] = copy.deepcopy(project["build"])
-                    project.pop("build", None)
-                    # from the top now y'all
-                    # try and install missing deps
-                    start_docker(idx, name, project, ctx, **docker_conf)
+            # if (
+            #     project["status"] != "crash"
+            #     and project["status"] != "success"
+            #     and "build" in project
+            #     and ctx.cfg["build"]["install_deps"] == "True"
+            # ):
+            #     end = time()
+            #     if "build" in project:
+            #         project["build"]["time"] = end - start
+            #     if stats is None:
+            #         stats = Statistics(1)
+            #     # set first build to true, so the analyzer doesn't save stats
+            #     project["is_first_build"] = True
+            #     stats.update(project, name, final_update=False)
+            #     if project["build"]["missing_dependencies"] != []:
+            #         project["missing_deps"] = copy.deepcopy(
+            #             project["build"]["missing_dependencies"]
+            #         )
+            #         project["install_deps"] = True
+            #         project["first_build"] = copy.deepcopy(project["build"])
+            #         project.pop("build", None)
+            #         # from the top now y'all
+            #         # try and install missing deps
+            #         start_docker(idx, name, project, ctx, **docker_conf)
             if do_double_build:
                 project["is_first_build"] = False
             if "bitcodes" in project:

@@ -7,7 +7,7 @@ from subprocess import PIPE
 import json
 
 from time import time
-from shutil import move, copyfile
+from shutil import move, copyfile, copy2
 from datetime import datetime
 from os.path import basename
 
@@ -15,28 +15,6 @@ from utils.driver import open_logfiles, recursively_get_files, recursively_get_d
 from build_systems.utils import run  # type: ignore
 
 DOCKER_MOUNT_POINT = "/home/fba_code"
-
-# OMIT_ERRORS_ARGS=""
-
-# OMIT_ERRORS_ARGS+=("-Wno-error=implicit-function-declaration")
-# OMIT_ERRORS_ARGS+=("-Wno-error=implicit-int")
-# OMIT_ERRORS_ARGS+=("-Wno-error=int-conversion")
-# OMIT_ERRORS_ARGS+=("-Wno-error=incompatible-function-pointer-types")
-# OMIT_ERRORS_ARGS+=("-Wno-error=narrowing")
-# OMIT_ERRORS_ARGS+=("-Wno-error=strict-prototypes")
-# OMIT_ERRORS_ARGS+=("-Wno-error=unused-but-set-variable")
-# OMIT_ERRORS_ARGS+=("-Wno-error=enum-constexpr-conversion")
-
-ERRORS_TO_OMIT_FLAGS = [
-    "-Wno-error=implicit-function-declaration",
-    "-Wno-error=implicit-int",
-    "-Wno-error=int-conversion",
-    "-Wno-error=incompatible-function-pointer-types",
-    "-Wno-error=narrowing",
-    "-Wno-error=strict-prototypes",
-    "-Wno-error=unused-but-set-variable",
-    "-Wno-error=enum-constexpr-conversion",
-]
 
 def get_folder_size(folder_path):
     total_size = 0
@@ -123,11 +101,13 @@ project = {
 }
 
 decompress_start = time()
-
 # untar the archive
-ret = run_command(["tar", "-xzf", f"{DOCKER_MOUNT_POINT}/ast_archive/{name}.tar.gz"], cwd=DOCKER_MOUNT_POINT)
-
+ret = run_command(["tar", "-xzf", f"{DOCKER_MOUNT_POINT}/ast_archive/{name}.tar.gz", "-C", DOCKER_MOUNT_POINT], cwd=DOCKER_MOUNT_POINT)
 decompress_end = time()
+
+with open(f"{DOCKER_MOUNT_POINT}/build/output.json", "r") as fin:
+    temp_project = json.load(fin)
+    project.update(temp_project["project"])
 
 if 'size_statistics' not in project:
     project['size_statistics'] = dict()
@@ -141,24 +121,27 @@ project['size_statistics']['bc_size'] = get_folder_size(os.path.join(DOCKER_MOUN
 # os.remove(f"{DOCKER_MOUNT_POINT}/ast_archive/{name}.tar.gz")
 
 # installing the system libraries/packages that the project depends on
-out = run(
-    ["apt-get", "update"],
-    cwd=DOCKER_MOUNT_POINT,
-)
+# TODO: sarus doesn't support this
+# out = run(
+#     ["apt-get", "update"],
+#     cwd=DOCKER_MOUNT_POINT,
+# )
 
-out = run(
-    ["apt-get", "build-dep", "-y", name],
-    cwd = DOCKER_MOUNT_POINT,
-    # stderr=PIPE,
-)
+# out = run(
+#     ["apt-get", "build-dep", "-y", name],
+#     cwd = DOCKER_MOUNT_POINT,
+#     # stderr=PIPE,
+# )
+
+json_input["project"]["build"]["temp_build_dir"] = os.path.abspath(json_input["project"]["build"]["temp_build_dir"])
 
 out = run(
     [
         "bash",
         "-c",
         # "shopt -s dotglob; cp -ap {}/build {}/{}".format(
-        "shopt -s dotglob; mv {}/build {}/{}".format(
-            DOCKER_MOUNT_POINT, DOCKER_MOUNT_POINT, basename(json_input["project"]["build"]["temp_build_dir"])
+        "shopt -s dotglob; mv {}/build {}".format(
+            DOCKER_MOUNT_POINT, json_input["project"]["build"]["temp_build_dir"]
         ),
     ],
     # stdout=subprocess.PIPE,
@@ -167,8 +150,30 @@ out = run(
     text=True,
 )
 
-ret = run_command("ls -la".split(), cwd=DOCKER_MOUNT_POINT)
-print(ret.stdout, flush = True)
+# copying the relevant headers into their place
+# this needs to run after copying to temp dir, since it might overwrite some of the headers
+copy_headers_start = time()
+headers_dir = os.path.join(json_input["project"]["build"]["temp_build_dir"], "relevant_headers")
+
+if 'releveant_headers_mapping' in project:
+    for header_idx, header_path in project['releveant_headers_mapping'].items():
+        # copy2 preserves metadata such as creation and modification times
+        # it calls copystat() under the hood
+        try:
+            if not os.path.exists(os.path.dirname(header_path)):
+                os.makedirs(os.path.dirname(header_path))
+            copy2(os.path.join(headers_dir, str(header_idx)), header_path)
+        except Exception as e:
+            print(f"Failed to copy header {header_idx} to {header_path}. Error: {e}")
+            ctx.err_log.print_error(idx, f"Failed to copy header {header_idx} to {header_path}. Error: {e}")
+else:
+    print("No relevant headers mapping found in project dict")
+    print("project object is:")
+    print(json.dumps(project, indent=2))
+    ctx.err_log.print_error(idx, "No relevant headers mapping found in project dict")
+
+copy_headers_end = time()
+project['size_statistics']['copy_headers_time'] = copy_headers_end - copy_headers_start
 
 if (
     json_input["project"]["build"]["build"] == "success"
@@ -200,7 +205,7 @@ if (
     print_section(idx, ctx, "running cxx-langstat for statistics")
 
     j = os.environ.get("JOBS", 1)
-    cmd = f"cxx-langstat -analyses={analyses_to_run} -emit-statistics -indir {results_dir} -out {results_dir}/overall_stats -- {' '.join(ERRORS_TO_OMIT_FLAGS)}".split()
+    cmd = f"cxx-langstat -analyses={analyses_to_run} -emit-statistics -indir {results_dir} -out {results_dir}/overall_stats --".split()
 
     emit_statistics_start = time()
     ret = run_command(cmd, cwd=DOCKER_MOUNT_POINT, stderr=PIPE)

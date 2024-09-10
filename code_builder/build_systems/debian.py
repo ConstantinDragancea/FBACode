@@ -1,14 +1,16 @@
 import shutil
 import subprocess
+import os
+import json
 
 from os.path import join, isfile, dirname, isdir
 from os import listdir, makedirs, remove
 from re import search, escape
 import pathlib
-import os
 from time import time
+from shutil import copyfile, copy2
 
-from .utils import run
+from .utils import run, insert_build_stage_markers
 
 
 class Context:
@@ -122,14 +124,28 @@ class Project:
         #           stderr=subprocess.PIPE)
         # we skip build dependencies so we can detect the diff from missing -> installed
         # -i to ignore changes
-        j = os.environ.get("JOBS", 1)
+        jobs_count = os.environ.get("JOBS", 1)
+
+        # out = insert_build_stage_markers(join(self.temp_build_dir, "debian", "rules"))
+        # shutil.copy2(join(self.temp_build_dir, "debian", "rules"), join(self.build_dir, "rules.modified"))
+        # if not out:
+        #     self.error_log.print_error(self.idx, "Failed to insert build stage markers")
+        #     return False
+
+        # https://www.man7.org/linux/man-pages/man1/dpkg-buildpackage.1.html
+        # we want to modify the clang calls only during the build stage of the build
+        # the buildinfo stage is the one that immediately follows the build stage
         out = run(
+            # f"dpkg-buildpackage -b --no-sign --no-check-builddeps -i='*' -j{jobs_count} --hook-build=\"touch /tmp/fbacode_build_stage_flag\" --hook-buildinfo=\"rm /tmp/fbacode_build_stage_flag\"",
             [
                 "dpkg-buildpackage",
+                "-b", # skip Debian bureaucracy, just build the binary
                 "--no-sign",
                 "--no-check-builddeps",
                 '-i="*"',
-                "-j{}".format(j),
+                "-j{}".format(jobs_count),
+                # "--hook-build=touch /tmp/fbacode_build_stage_flag",
+                # "--hook-buildinfo=rm /tmp/fbacode_build_stage_flag",
             ],
             cwd=self.temp_build_dir,
             stderr=subprocess.PIPE,
@@ -141,7 +157,7 @@ class Project:
         self.output_log.print_info(self.idx, "{}:\n{}".format(out.args, out.stderr))
         # move build files to attached volume
         for f in listdir(self.build_dir):
-            if ".log" in f:
+            if ".log" in f or f == "header_dependencies":
                 continue
             p = join(self.build_dir, f)
             if isdir(p):
@@ -197,6 +213,84 @@ class Project:
             counter += 1
         print(f"Globbed {counter} AST files")
         return True
+    
+    def save_header_files(self, headers_dir):
+        if not os.path.exists(headers_dir):
+            os.makedirs(headers_dir)
+        # Save the referenced AST files
+        relevant_header_files_mapping = dict()
+
+        with open(os.path.join(self.build_dir, "header_dependencies.log"), "w") as fout:
+            # go through all files in the header_dependencies/ folder
+            for file in os.listdir(os.path.join(self.build_dir, "header_dependencies")):
+                if not file.endswith(".log"):
+                    continue
+
+                try:
+                    with open(os.path.join(self.build_dir, "header_dependencies", file), "r") as fin:
+                        content = fin.read()
+
+                        if "\n#" in content:
+                            raise Exception("Header dependency file contains comments")
+
+                        fout.write(content)
+                        # fout.write('\n\n')
+                except Exception as e:
+                    print(f"Failed to read header dependency file: {file}")
+                    print(e)
+                    return False
+
+        # if not os.path.exists(os.path.join(self.build_dir, "header_dependencies.log")):
+        #     print("header_dependencies.log file does not exist")
+        #     return relevant_header_files_mapping
+
+        with open(os.path.join(self.build_dir, "header_dependencies.log"), "r") as fin:
+            header_dependencies_content = fin.read().strip().split('\n\n')
+
+        clang_call_cwd = []
+        clang_dependencies_content = []
+
+        for clang_call in header_dependencies_content:
+            clang_call_lines = clang_call.split('\n')
+            if len(clang_call_lines) < 2:
+                continue
+            if clang_call_lines[1].startswith("programs:"):
+                # some weird format that i don't know how to parse or what to do with it
+                continue
+            clang_call_cwd.append(clang_call_lines[0])
+            clang_dependencies_content.append('\n'.join(clang_call_lines[1:]))
+        
+        all_headers = []
+
+        for idx, (cwd, clang_dependencies) in enumerate(zip(clang_call_cwd, clang_dependencies_content)):
+            tokens = clang_dependencies.split()[1:] # skip the first since its the target name "test.o: ..."
+            tokens = [x for x in tokens if not '\\' in x]
+
+            for token in tokens:
+                if os.path.isabs(token):
+                    all_headers.append(os.path.normpath(token))
+                else:
+                    all_headers.append(os.path.normpath(os.path.join(cwd, token)))
+
+        all_headers = list(set(all_headers))
+
+        print(f"Found {len(all_headers)} header files that should be saved")
+
+        header_idx = 0
+        for header_path in all_headers:
+            if not os.path.exists(header_path):
+                print("Header file does not actually exist: {}".format(header_path))
+                continue
+                
+            relevant_header_files_mapping[header_idx] = header_path
+            # copy2 in order to preserve metadata
+            copy2(header_path, os.path.join(headers_dir, str(header_idx)), follow_symlinks=True)
+            header_idx += 1
+
+            if header_idx % 50 == 0:
+                print(f"Saved {header_idx} header files")
+        
+        return relevant_header_files_mapping
 
     def clean(self):
         out = run(["debian/rules", "clean"], cwd=self.repository_path)
@@ -210,6 +304,7 @@ class Project:
 
     @staticmethod
     def get_docker_image(repo_dir, clang_version=9):
+        # return "spcleth/fbacode:debian-bookworm-clang-langstat-{}".format(clang_version)
         return "spcleth/fbacode:debian-bookworm-clang-header-save-test-{}".format(clang_version)
         # return "spcleth/fbacode:debian-bookworm-clang-test-{}".format(clang_version)
         # return "spcleth/fbacode:debian-bookworm-clang-{}".format(clang_version)

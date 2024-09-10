@@ -1,0 +1,33 @@
+{
+    "debian": {
+        "ares": {
+            "type": "debian",
+            "version": "126-3",
+            "suite": "bookworm",
+            "recently_updated": true,
+            "status": "new",
+            "codebase_data": {
+                "sloc": [
+                    [
+                        "cpp",
+                        356508
+                    ],
+                    [
+                        "ansic",
+                        20394
+                    ],
+                    [
+                        "makefile",
+                        16
+                    ],
+                    [
+                        "sh",
+                        2
+                    ]
+                ],
+                "vcs_url": "https://salsa.debian.org/games-team/ares",
+                "vcs_type": "git"
+            }
+        }
+    }
+}

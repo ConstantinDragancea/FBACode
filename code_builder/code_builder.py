@@ -68,9 +68,12 @@ def get_dir_size(start_path):
         for f in filenames:
             fp = join(dirpath, f)
             # skip if it is symbolic link
-            if not os.path.islink(fp):
+            if os.path.exists(fp) and not os.path.islink(fp):
                 file_count += 1
-                total_size += os.path.getsize(fp)
+                try:
+                    total_size += os.path.getsize(fp)
+                except Exception as e:
+                    print(f"Error getting size of {fp}: {e}")
 
     return total_size, file_count
 
@@ -100,7 +103,7 @@ def remove_files_containing(dir, substr):
 
 def clean_build_dir(build_dir):
     nr_removed_files = 0
-    EXTENSIONS_TO_REMOVE = [".ast", ".bc", ".png", ".jpg", ".jpeg", ".rar", ".zip", ".7z", ".tar", ".gz", ".wav", ".mp3", ".mp4", ".o", ".a", ".html", ".css", ".svg", ".sh", ".make", ".txt", ".md", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".json", ".xml", ".yaml", ".yml", ".csv", ".tsv", ".sql", ".py", ".pyc", ".pyo", ".pyd", ".jar", ".war", ".ear", ".so", ".dll", ".exe", ".bat", ".cmd", ".ps1", ".psm1", ".psd1", ".ps1xml", ".pssc", ".psc1", ".pssc"]
+    EXTENSIONS_TO_REMOVE = [".ast", ".bc", ".png", ".jpg", ".jpeg", ".rar", ".zip", ".7z", ".tar", ".gz", ".wav", ".mp3", ".mp4", ".o", ".a", ".html", ".css", ".svg", ".sh", ".make", ".txt", ".md", ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".xml", ".yaml", ".yml", ".csv", ".tsv", ".sql", ".py", ".pyc", ".pyo", ".pyd", ".jar", ".war", ".ear", ".so", ".dll", ".exe", ".bat", ".cmd", ".ps1", ".psm1", ".psd1", ".ps1xml", ".pssc", ".psc1", ".pssc"]
     for ext in EXTENSIONS_TO_REMOVE:
         nr_removed_files += remove_files_with_ext(build_dir, ext)
     
@@ -110,7 +113,7 @@ def clean_build_dir(build_dir):
     return nr_removed_files
 
 def send_to_remote_server(ctx, project_name, build_dir, ast_dir, bitcodes_dir, project):
-    # nr_removed_files = clean_build_dir(build_dir)
+    nr_removed_files = clean_build_dir(build_dir)
     nr_removed_files = 0
 
     # the temporary file gets deleted when it gets garbage collected
@@ -120,7 +123,21 @@ def send_to_remote_server(ctx, project_name, build_dir, ast_dir, bitcodes_dir, p
             tar.add(name = ast_dir, arcname = f'./compiler_output/AST')
             tar.add(name = bitcodes_dir, arcname = f'./compiler_output/bitcodes')
             # tar.add(name = features_dir, arcname = f'./compiler_output/features/{project_name}')
-            tar.add(name = build_dir, arcname = f'./build')
+
+            # need to recursively add the build folder because some weird projects (scid) create a 
+            # folder with no read permission, ony for sudo.
+            # need to manually walk through and add the files if they are readable
+            
+            for root, dirs, files in os.walk(build_dir):
+                for file in files:
+                    file_path = join(root, file)
+                    try:
+                        tar.add(name = file_path, arcname = f'./build/{file_path}')
+                    except Exception as e:
+                        # print(f"failed to add file {file_path} to tarball: {e}")
+                        pass
+
+            # tar.add(name = build_dir, arcname = f'./build')
             # if "temp_build_dir" in project["build"]:
             #     tar.add(name = project["build"]["temp_build_dir"], arcname = basename(project["build"]["temp_build_dir"]))
 
@@ -202,19 +219,6 @@ def download_and_build(
         project["source"]["file_count"] = count
         project["source"]["size"] = size
     # delete build files if option set
-    # if ctx.cfg["build"]["keep_build_files"] == "False":
-    #     # delete everything except log file and project.json
-    #     proj_build_dir = join(build_dir, basename(project["source"]["dir"]))
-    #     if exists(proj_build_dir):
-    #         for f in listdir(proj_build_dir):
-    #             try:
-    #                 p = join(proj_build_dir, f)
-    #                 if isdir(p):
-    #                     shutil.rmtree(p, ignore_errors=True)
-    #                 elif not (".log" in f or f == "output.json"):
-    #                     remove(p)
-    #             except Exception as e:
-    #                 print("Error removing build dir: {}".format(e))
     if ctx.cfg["build"]["keep_source_files"] == "False":
         # delete source folder
         shutil.rmtree(project["source"]["dir"], ignore_errors=True)
@@ -227,11 +231,13 @@ def download_and_build(
     # features_dir = join(target_dir, "features", name)
 
     if ctx.cfg["build"]["store_to_remote_server"] == "True":
+        print(f"Storing project {name} artifacts to remote server...")
         nr_asts = send_to_remote_server(ctx, name, proj_build_dir, ast_dir, bitcodes_dir, project)
         if "build" in new_project:
             new_project["build"]["nr_asts"] = nr_asts
         
     if ctx.cfg["build"]["remove_local_artifacts"] == "True":
+        print(f"Removing local artifacts of project {name}...")
         # shutil.rmtree(proj_build_dir, ignore_errors=True)
         # recursively delete files in the build folder except the logs
         # all_files = glob.glob(join(proj_build_dir, "**/*"), recursive = True)
@@ -301,16 +307,18 @@ def build_projects(
     running_builds["builds_left"] = projects_count
 
     previous_all_repositories = dict()
-    if exists("all_built.json"):
-        with open("all_built.json", "r") as fin:
+    if exists(os.path.join(build_dir, "all_built.json")):
+        with open(os.path.join(build_dir, "all_built.json"), "r") as fin:
             previous_all_repositories = json.load(fin)
     
     
-    if exists("intermediate_all_built.json"):
-        with open("intermediate_all_built.json", "r") as fin:
+    if exists(os.path.join(build_dir, "intermediate_all_built.json")):
+        with open(os.path.join(build_dir, "intermediate_all_built.json"), "r") as fin:
             temp_data = json.load(fin)
             previous_all_repositories.update(temp_data)
     
+    # print(f"Builds left: {running_builds['builds_left']}")
+    # print(f"Previous all repo: {json.dumps(previous_all_repositories, indent=2)}")
     with concurrent.futures.ProcessPoolExecutor(threads_count) as pool:
         database_processers = []
         # we need an instance of the statistics class for the dependency analysis
@@ -327,6 +335,16 @@ def build_projects(
             # idx = indices[0]
 
             projects_to_build = random.sample(list(repositories.items()), len(list(repositories.items())))
+            # projects_to_build = [(name, proj) for name, proj in projects_to_build if 'qt6' not in name] #TODO remove this in the end
+            # projects_to_build = [(name, proj) for name, proj in projects_to_build if 'seqan2' not in name] #TODO remove this in the end
+            # projects_to_build = [(name, proj) for name, proj in projects_to_build if 'linux' not in name] #TODO remove this in the end
+            # projects_to_build = [(name, proj) for name, proj in projects_to_build if 'bagel' not in name] #TODO remove this in the end
+            # projects_to_build = [(name, proj) for name, proj in projects_to_build if 'trilinos' not in name] #TODO remove this in the end
+            # projects_to_build = [(name, proj) for name, proj in projects_to_build if 'librecad' not in name] #TODO remove this in the end
+            projects_to_build = [(name, proj) for name, proj in projects_to_build if name not in previous_all_repositories] #TODO remove this in the end
+            
+            running_builds["builds_left"] = len(projects_to_build)
+            
             futures = []
             idx_in_source = 0
 
@@ -366,9 +384,10 @@ def build_projects(
 
                     all_repositories[future_name] = future_project
                     previous_all_repositories[future_name] = future_project
-                    print(f"Got back the result of the {future_name} project future. Writing to file...")
+                    print(f"Got back the result of the {future_name} project future. Writing to file...", flush = True)
 
-                    with open("intermediate_all_built.json", "w") as o:
+                    print(f"Writing intermediate_all_built to {os.path.join(build_dir, 'intermediate_all_built.json')}")
+                    with open(os.path.join(build_dir, "intermediate_all_built.json"), "w") as o:
                         o.write(json.dumps(previous_all_repositories, indent = 2))
 
                     if running_builds["builds_left"] % 5 == 0:
@@ -417,61 +436,15 @@ def build_projects(
                     ))
                     idx += 1
                     idx_in_source += 1
-
-        #     for name, proj in projects_to_build[:threads_count]:
-        #         if name in previous_all_repositories:# and (previous_all_repositories[name]["status"] == "success"
-        #                                               #    or previous_all_repositories[name]["status"] == "have archive"
-        #                                                #   or ("build" in previous_all_repositories[name] and previous_all_repositories[name]["build"].get("build", "") == "success")):
-        #             # all_repositories[name] = previous_all_repositories[name]
-        #             idx += 1
-        #             running_builds["builds_left"] -= 1
-        #             continue
-
-        #         future = pool.submit(
-        #             initializer_func,
-        #             ctx,
-        #             download_and_build,
-        #             (
-        #                 db_processor,
-        #                 idx,
-        #                 name,
-        #                 proj,
-        #                 target_dir,
-        #                 build_dir,
-        #                 ctx,
-        #                 temporary_stats,
-        #                 running_builds,
-        #             ),
-        #         )
-        #         projects.append(future)
-        #         idx += 1
-        #     repositories_idx += repo_count
-        # print("submitted {} tasks to queue".format(idx))
-        # # for project in concurrent.futures.as_completed(futures):
-        # for project in projects:
-        #     idx, key, val = project.result()
-        #     all_repositories[key] = val
-        #     previous_all_repositories[key] = val
-        #     print(f"Got back the result of the {key} project future. Writing to file...")
-
-        #     all_built_lock.acquire()
-        #     with open("intermediate_all_built.json", "w") as o:
-        #         o.write(json.dumps(previous_all_repositories, indent = 2))
-        #     all_built_lock.release()
-
-        #     # if running_builds["builds_left"] % 5 == 0:
-        #     # print(f"Builds left: {running_builds['builds_left']}")
-
-        #     # builds_left -= 1
-        #     # print("{} builds left".format(builds_left))
+                
     end = time()
     print("Process repositorites in %f [s]" % (end - start))
     start = time()
     
-    with open("all_built.json", "w") as o:
+    with open(os.path.join(build_dir, "all_built.json"), "w") as o:
         o.write(json.dumps(previous_all_repositories, indent = 2))
 
-    with open("current_build.json", "w",) as o:
+    with open(os.path.join(build_dir, "current_build.json"), "w",) as o:
         o.write(json.dumps(all_repositories, indent=2))
         o.flush()
 

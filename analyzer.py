@@ -86,10 +86,19 @@ def main():
         _, temp_file_path = tempfile.mkstemp()
         with Connection(host = HOST, user = USER) as connection:
             # print(connection.run("uname -s").stdout.strip())
-            connection.get(remote = join(path_to_collection, 'build_summary.json'), local = temp_file_path)
-        with open(temp_file_path) as tmp_file:
-            projects_info = json.load(tmp_file)
-        
+            try:
+                result = connection.get(remote = join(path_to_collection, 'build_summary.json'), local = temp_file_path)
+                with open(temp_file_path, "r") as tmp_file:
+                    projects_info = json.load(tmp_file)
+            except Exception as e:
+                result = connection.run(f"ls {path_to_collection}", hide = True)
+                print(result.stdout)
+                project_list = result.stdout.strip().split()
+                project_list = [file[:-7] for file in project_list if file.endswith('.tar.gz')]
+                result = connection.get(remote = '/spclstorage/cdragancea/builds_archive/undoubled_build_folder/build_summary.json', local = temp_file_path)
+                with open(temp_file_path, "r") as fin:
+                    projects_info = {k : v for (k, v) in json.load(fin).items() if k in project_list}
+
         os.unlink(temp_file_path)
     except Exception as e:
         error_print(f'Failed to read build_summary: {e}')
