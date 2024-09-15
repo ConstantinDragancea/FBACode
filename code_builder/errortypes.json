@@ -304,11 +304,18 @@
       "qt6-3d",
       "qt6-remoteobjects",
       "qt6-positioning",
-      "qt6-multimedia"
+      "qt6-multimedia",
+      "qt6-base",
+      "qt6-quick3dphysics",
+      "qt6-declarative",
+      "qt6-charts",
+      "qt6-scxml",
+      "qt6-svg",
+      "pyqt6"
     ],
     "origin": "general_error",
     "regex": "error:\\ ",
-    "amount": 306
+    "amount": 313
   },
   "error:": {
     "name": "error:",
@@ -594,11 +601,18 @@
       "qt6-3d",
       "qt6-remoteobjects",
       "qt6-positioning",
-      "qt6-multimedia"
+      "qt6-multimedia",
+      "qt6-base",
+      "qt6-quick3dphysics",
+      "qt6-declarative",
+      "qt6-charts",
+      "qt6-scxml",
+      "qt6-svg",
+      "pyqt6"
     ],
     "origin": "clang",
     "regex": "error:",
-    "amount": 282
+    "amount": 289
   },
   "error: ISO C++17 does not allow 'register' storage class specifier [-Wregister]": {
     "name": "ISO C++17 does not allow 'register' storage class specifier [-Wregister]",
@@ -1582,6 +1596,25 @@
     "regex": "ERROR:\\ Dependency\\ lookup\\ for\\ gstreamer\\-player\\-1\\.0\\ with\\ method\\ 'pkgconfig'\\ failed:\\ Could\\ not\\ generate\\ cargs\\ for\\ gstreamer\\-player\\-1\\.0:",
     "amount": 11
   },
+  "error: implicit truncation from 'int' to a one-bit wide bit-field changes value from 1 to -1 [-Werror,-Wsingle-bit-bitfield-constant-conversion]": {
+    "name": "implicit truncation from 'int' to a one-bit wide bit-field changes value from 1 to -1 [-Werror,-Wsingle-bit-bitfield-constant-conversion]",
+    "projects": [
+      "squid",
+      "ring",
+      "oggvideotools",
+      "qtwebengine-opensource-src",
+      "blender",
+      "php8.2",
+      "telegram-desktop",
+      "wine",
+      "drbd-utils",
+      "jreen",
+      "qt6-svg"
+    ],
+    "origin": "clang",
+    "regex": "error:\\ implicit\\ truncation\\ from\\ 'int'\\ to\\ a\\ one\\-bit\\ wide\\ bit\\-field\\ changes\\ value\\ from\\ 1\\ to\\ \\-1\\ \\[\\-Werror,\\-Wsingle\\-bit\\-bitfield\\-constant\\-conversion\\]",
+    "amount": 11
+  },
   "/usr/bin/ld: cannot find -ldld: No such file or directory": {
     "name": "/usr/bin/ld: cannot find -ldld: No such file or directory",
     "projects": [
@@ -1633,24 +1666,6 @@
     ],
     "origin": "dependency",
     "regex": "(?:\\.\\.|\\.)?(?:[/]*/)+\\S*\\.\\S+(?:\\sline\\s\\d+:?)?(?=\\s|$|\\.)\\ /usr/lib/llvm\\-/bin/clang\\+\\+:\\ No\\ such\\ file\\ or\\ directory",
-    "amount": 10
-  },
-  "error: implicit truncation from 'int' to a one-bit wide bit-field changes value from 1 to -1 [-Werror,-Wsingle-bit-bitfield-constant-conversion]": {
-    "name": "implicit truncation from 'int' to a one-bit wide bit-field changes value from 1 to -1 [-Werror,-Wsingle-bit-bitfield-constant-conversion]",
-    "projects": [
-      "squid",
-      "ring",
-      "oggvideotools",
-      "qtwebengine-opensource-src",
-      "blender",
-      "php8.2",
-      "telegram-desktop",
-      "wine",
-      "drbd-utils",
-      "jreen"
-    ],
-    "origin": "clang",
-    "regex": "error:\\ implicit\\ truncation\\ from\\ 'int'\\ to\\ a\\ one\\-bit\\ wide\\ bit\\-field\\ changes\\ value\\ from\\ 1\\ to\\ \\-1\\ \\[\\-Werror,\\-Wsingle\\-bit\\-bitfield\\-constant\\-conversion\\]",
     "amount": 10
   },
   "error: \"Header 'process.h' could not be found\"": {
@@ -9808,6 +9823,15 @@
     ],
     "origin": "dependency",
     "regex": "make\\[1\\]:\\ llvm\\-config:\\ No\\ such\\ file\\ or\\ directory",
+    "amount": 1
+  },
+  "ERROR: Unknown module(s) in QT: axcontainer": {
+    "name": "ERROR: Unknown module(s) in QT: axcontainer",
+    "projects": [
+      "pyqt6"
+    ],
+    "origin": "general_error",
+    "regex": "ERROR:\\ Unknown\\ module\\(s\\)\\ in\\ QT:\\ axcontainer",
     "amount": 1
   }
 }

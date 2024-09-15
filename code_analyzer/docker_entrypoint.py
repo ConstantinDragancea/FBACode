@@ -88,6 +88,7 @@ for file in glob.glob("*.log"):
 
 ctx.set_loggers(loggers.stdout, loggers.stderr)
 
+project_name = json_input["name"]
 # Updated -> Configure
 project = {
     # "status": "configure",
@@ -104,6 +105,11 @@ decompress_start = time()
 # untar the archive
 ret = run_command(["tar", "-xzf", f"{DOCKER_MOUNT_POINT}/ast_archive/{name}.tar.gz", "-C", DOCKER_MOUNT_POINT], cwd=DOCKER_MOUNT_POINT)
 decompress_end = time()
+
+if os.path.exists(f"{DOCKER_MOUNT_POINT}/build/build/{project_name}") and os.path.isdir(f"{DOCKER_MOUNT_POINT}/build/build/{project_name}"):
+    # need to move "build/build/project_name" to "build"
+    run_command(["mv", f"{DOCKER_MOUNT_POINT}/build", f"{DOCKER_MOUNT_POINT}/build2"], cwd=DOCKER_MOUNT_POINT)
+    run_command(["mv", f"{DOCKER_MOUNT_POINT}/build2/build/{project_name}", f"{DOCKER_MOUNT_POINT}/build/"], cwd=DOCKER_MOUNT_POINT)
 
 with open(f"{DOCKER_MOUNT_POINT}/build/output.json", "r") as fin:
     temp_project = json.load(fin)
