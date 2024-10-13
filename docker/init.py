@@ -247,15 +247,6 @@ project["build"]["installed"].extend(new_pkgs)
 if builder.temp_build_dir is not None:
     project["build"]["temp_build_dir"] = builder.temp_build_dir
 
-# cmd = f"cxx-langstat -analyses=ala,cla,lka,msa,tpa,ua,ula,vta,mka,cta -emit-features -indir {ast_dir} -outdir {DOCKER_MOUNT_POINT}/analyze -j 64 --".split()
-# analyze_features_start = time()
-# ret = run(cmd, cwd=DOCKER_MOUNT_POINT, capture_output = True, text = True) #TODO: switch the stdout to None to get the output in the container
-# analyze_features_end = time()
-
-# ctx.out_log.print_info(idx, f"cxx-langstat -emit-features retcode: {ret.returncode}")
-# ctx.out_log.print_info(idx, f"cxx-langstat -emit-features stdout: {ret.stdout}")
-# ctx.out_log.print_info(idx, f"cxx-langstat -emit-features stderr: {ret.stderr}")
-
 
 
 out = {"idx": idx, "name": name, "project": project}
@@ -268,7 +259,6 @@ with open("output.json", "w") as f:
 for file in glob.glob("*.log"):
     move(file, build_dir)
 copy2("output.json", os.path.join(build_dir, "output.json"))
-# copy2("output.json", os.path.join(builder.temp_build_dir, "output.json"))
 
 # change the user and group to the one of the host, since we are root
 host_uid = os.stat(build_dir).st_uid

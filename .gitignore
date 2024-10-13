@@ -125,3 +125,5 @@ cxx-langstat/
 # Data analysis folder
 data_analysis/**/*.png
 data_analysis/**/*.txt
+data_analysis/**/*.pdf
+build-*/

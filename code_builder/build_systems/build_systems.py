@@ -56,7 +56,7 @@ ci_systems = {
 }
 
 # if any of these, do a build without installing first, then install in second build
-double_build_ci = {"travis", "gh_actions", "debian_install"}
+# double_build_ci = {"travis", "gh_actions", "debian_install"}
 
 
 def start_docker(
@@ -157,9 +157,7 @@ def start_docker(
         # time = container.stats(stream=False)["read"]
         # try with utc time, should be faster
         # TODO: make timeout configurable
-        # timeout = datetime.utcnow() - timedelta(minutes=docker_timeout)
         timeout = datetime.now(timezone.utc) - timedelta(minutes=docker_timeout)
-        # timeout = datetime.now() - timedelta(minutes=docker_timeout)
         logs = container.logs(since=timeout.timestamp(), tail=10)
         # ctx.out_log.print_info(idx, logs)
         if logs == b"":
@@ -291,15 +289,15 @@ def recognize_and_build(idx, name, project, build_dir, target_dir, ctx, stats=No
                 makedirs(bitcodes_dir)
 
             # do not install dpendencies the first time around
-            do_double_build = (
-                ci_system in double_build_ci
-                and ctx.cfg["build"]["double_build"] == "True"
-            )
-            if do_double_build:
-                project["install_deps"] = False
-                project["is_first_build"] = True
-            else:
-                project["install_deps"] = ctx.cfg["build"]["install_deps"] == "True"
+            # do_double_build = (
+            #     ci_system in double_build_ci
+            #     and ctx.cfg["build"]["double_build"] == "True"
+            # )
+            # if do_double_build:
+            #     project["install_deps"] = False
+            #     project["is_first_build"] = True
+            # else:
+            #     project["install_deps"] = ctx.cfg["build"]["install_deps"] == "True"
 
             docker_conf = {
                 "source_dir": source_dir,
@@ -315,24 +313,24 @@ def recognize_and_build(idx, name, project, build_dir, target_dir, ctx, stats=No
 
             # if we have a build system that can install packages, rerun with packages
             # at the moment only travis, can be expended..
-            if (
-                do_double_build
-                and project["status"] != "success"
-                and project["status"] != "crash"
-                and "build" in project
-            ):
-                end = time()
-                if "build" in project:
-                    project["build"]["time"] = end - start
-                if stats is None:
-                    stats = Statistics(1)
-                stats.update(project, name, final_update=False)
-                project["no_install_build"] = copy.deepcopy(project["build"])
-                project["install_deps"] = ctx.cfg["build"]["install_deps"] == "True"
-                project.pop("build", None)
-                project["double_build_done"] = True
-                project["is_first_build"] = False
-                start_docker(idx, name, project, ctx, **docker_conf)
+            # if (
+            #     do_double_build
+            #     and project["status"] != "success"
+            #     and project["status"] != "crash"
+            #     and "build" in project
+            # ):
+            #     end = time()
+            #     if "build" in project:
+            #         project["build"]["time"] = end - start
+            #     if stats is None:
+            #         stats = Statistics(1)
+            #     stats.update(project, name, final_update=False)
+            #     project["no_install_build"] = copy.deepcopy(project["build"])
+            #     project["install_deps"] = ctx.cfg["build"]["install_deps"] == "True"
+            #     project.pop("build", None)
+            #     project["double_build_done"] = True
+            #     project["is_first_build"] = False
+            #     start_docker(idx, name, project, ctx, **docker_conf)
             # the build failed, let's try again with missing pkgs data
             # if (
             #     project["status"] != "crash"
@@ -358,8 +356,8 @@ def recognize_and_build(idx, name, project, build_dir, target_dir, ctx, stats=No
             #         # from the top now y'all
             #         # try and install missing deps
             #         start_docker(idx, name, project, ctx, **docker_conf)
-            if do_double_build:
-                project["is_first_build"] = False
+            # if do_double_build:
+            #     project["is_first_build"] = False
             if "bitcodes" in project:
                 bitcodes = [
                     x

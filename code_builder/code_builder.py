@@ -335,12 +335,6 @@ def build_projects(
             # idx = indices[0]
 
             projects_to_build = random.sample(list(repositories.items()), len(list(repositories.items())))
-            # projects_to_build = [(name, proj) for name, proj in projects_to_build if 'qt6' not in name] #TODO remove this in the end
-            # projects_to_build = [(name, proj) for name, proj in projects_to_build if 'seqan2' not in name] #TODO remove this in the end
-            # projects_to_build = [(name, proj) for name, proj in projects_to_build if 'linux' not in name] #TODO remove this in the end
-            # projects_to_build = [(name, proj) for name, proj in projects_to_build if 'bagel' not in name] #TODO remove this in the end
-            # projects_to_build = [(name, proj) for name, proj in projects_to_build if 'trilinos' not in name] #TODO remove this in the end
-            # projects_to_build = [(name, proj) for name, proj in projects_to_build if 'librecad' not in name] #TODO remove this in the end
             projects_to_build = [(name, proj) for name, proj in projects_to_build if name not in previous_all_repositories] #TODO remove this in the end
             
             running_builds["builds_left"] = len(projects_to_build)

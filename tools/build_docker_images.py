@@ -13,28 +13,12 @@ REPOSITORY_NAME = "spcleth/fbacode"
 images = {
     # "ubuntu-2204-clang": {"dockerfile": "ubuntu-2204-clang.dockerfile", "clang_version": 18},
     # "ubuntu-2204-clang": {"dockerfile": "ubuntu-2204-clang.dockerfile", "clang_version": 17},
-    # "debian-bookworm-clang-base-test": {"dockerfile": "debian-bookworm-clang-base.dockerfile", "clang_version": 18},
-    # "debian-bookworm-clang-test": {"dockerfile": "debian-bookworm-clang-base.dockerfile", "clang_version": 18},
-    # "debian-bookworm-clang-header-save-test": {"dockerfile": "debian-bookworm-clang.dockerfile", "clang_version": 18},
+    # "debian-bookworm-clang-base": {"dockerfile": "debian-bookworm-clang-base.dockerfile", "clang_version": 18},
+    # "debian-bookworm-clang": {"dockerfile": "debian-bookworm-clang-base.dockerfile", "clang_version": 18},
+    # "debian-bookworm-clang-header-save": {"dockerfile": "debian-bookworm-clang.dockerfile", "clang_version": 18},
     # "debian-bookworm-clang-base-beta": {"dockerfile": "debian-bookworm-clang-base-beta.dockerfile", "clang_version": 18},
-    "debian-bookworm-cxxlangstat-test": {"dockerfile": "debian-bookworm-cxxlangstat.dockerfile", "clang_version": 18},
-    # "debian-bookworm-clang-langstat": {"dockerfile": "debian-bookworm-clang-langstat.dockerfile", "clang_version": 18},
+    "debian-bookworm-cxxlangstat": {"dockerfile": "debian-bookworm-cxxlangstat.dockerfile", "clang_version": 18},
     # "debian-bookworm-clang": {"dockerfile": "debian-bookworm-clang.dockerfile", "clang_version": 17},
-    # "ubuntu-2004-clang": {"dockerfile": "ubuntu-2004-clang.dockerfile", "clang_version": 11},
-    # "ubuntu-2004-clang-local-build": {"dockerfile": "ubuntu-2004-clang-local-build.dockerfile", "clang_version": 18},
-    # 'debian-sid': {
-    #     'dockerfile': 'Dockerfile_debian-sid.base'
-    # },
-    # "debian-buster-clang": {"dockerfile": "debian-buster-clang.dockerfile"},
-    # 'debian-bullseye': {
-    #     'dockerfile': 'Dockerfile_debian-bullseye.base'
-    # }
-    # "ubuntu-bionic-clang": {"dockerfile": "ubuntu-bionic-clang.dockerfile"},
-    # 'ubuntu-trusty-clang': {
-    #     'dockerfile': 'ubuntu-trusty-clang.dockerfile'
-    # },
-    # "ubuntu-xenial-clang": {"dockerfile": "ubuntu-xenial-clang.dockerfile"},
-    # "ubuntu-focal-clang": {"dockerfile": "ubuntu-focal-clang.dockerfile"},
 }
 
 # default version 9, lets try to read version from config file

@@ -46,10 +46,7 @@ def run_command(cmd, cwd, capture_output = False, text = False, stdout = None, s
     ret = run(cmd, cwd=cwd, capture_output = capture_output, text = text)
     if ret.returncode:
         print(f"Failed to run command '{cmd}', got return code: {ret.returncode}")
-        # ctx.err_log.print_error(idx, "stderr: {}".format(ret.stderr))
-        # ctx.out_log.print_info(idx, "stdout: {}".format(ret.stdout))
-        # print(f"[IDX {idx}]: stdout: {ret.stdout}")
-        # print(f"[IDX {idx}]: stderr: {ret.stderr}")
+        ctx.err_log.print_error(idx, "stderr: {}".format(ret.stderr))
     ctx.out_log.print_info(idx, f"command '{cmd}' ran successfully!")
     print(f"[IDX {idx}]: command '{cmd}' ran successfully!", flush = True)
     return ret
@@ -89,9 +86,7 @@ for file in glob.glob("*.log"):
 ctx.set_loggers(loggers.stdout, loggers.stderr)
 
 project_name = json_input["name"]
-# Updated -> Configure
 project = {
-    # "status": "configure",
     "analyze": {
         "dir": external_results_dir,
         "stdout": os.path.basename(loggers.stdout_file),
@@ -106,6 +101,8 @@ decompress_start = time()
 ret = run_command(["tar", "-xzf", f"{DOCKER_MOUNT_POINT}/ast_archive/{name}.tar.gz", "-C", DOCKER_MOUNT_POINT], cwd=DOCKER_MOUNT_POINT)
 decompress_end = time()
 
+
+# TODO: this was a quick fix. need to solve this problem in the builder
 if os.path.exists(f"{DOCKER_MOUNT_POINT}/build/build/{project_name}") and os.path.isdir(f"{DOCKER_MOUNT_POINT}/build/build/{project_name}"):
     # need to move "build/build/project_name" to "build"
     run_command(["mv", f"{DOCKER_MOUNT_POINT}/build", f"{DOCKER_MOUNT_POINT}/build2"], cwd=DOCKER_MOUNT_POINT)
@@ -123,21 +120,9 @@ project['size_statistics']['nr_bc_files'] = len(recursively_get_files(os.path.jo
 project['size_statistics']['ast_size'] = get_folder_size(os.path.join(DOCKER_MOUNT_POINT, "compiler_output", "AST"))
 project['size_statistics']['bc_size'] = get_folder_size(os.path.join(DOCKER_MOUNT_POINT, "compiler_output", "bitcodes"))
 
-# remove archive
+# remove archive. we don't do it anymore because we mount it from disk.
+# we let kost that started the container delete the archive, after it is done running the container
 # os.remove(f"{DOCKER_MOUNT_POINT}/ast_archive/{name}.tar.gz")
-
-# installing the system libraries/packages that the project depends on
-# TODO: sarus doesn't support this
-# out = run(
-#     ["apt-get", "update"],
-#     cwd=DOCKER_MOUNT_POINT,
-# )
-
-# out = run(
-#     ["apt-get", "build-dep", "-y", name],
-#     cwd = DOCKER_MOUNT_POINT,
-#     # stderr=PIPE,
-# )
 
 json_input["project"]["build"]["temp_build_dir"] = os.path.abspath(json_input["project"]["build"]["temp_build_dir"])
 
@@ -150,8 +135,6 @@ out = run(
             DOCKER_MOUNT_POINT, json_input["project"]["build"]["temp_build_dir"]
         ),
     ],
-    # stdout=subprocess.PIPE,
-    # stderr=subprocess.PIPE,
     capture_output=True,
     text=True,
 )
@@ -230,6 +213,7 @@ if (
     project["features_files"] = {"dir": external_results_dir}
     project["analysis emit-stats retcode"] = ret.returncode
 
+# contents of output.json
 out = {"idx": idx, "name": name, "project": project}
 print("output.json content:")
 print(json.dumps(out, indent=2), flush = True)

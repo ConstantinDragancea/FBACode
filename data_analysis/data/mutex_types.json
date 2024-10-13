@@ -1,0 +1,24 @@
+{
+    "std::mutex": {
+        "distinct count": 423,
+        "as variable declarations": 2898,
+        "as function return types": 81,
+        "as new pointer expressions": 45
+    },
+    "std::recursive_mutex": {
+        "distinct count": 81,
+        "as variable declarations": 297,
+        "as function return types": 40,
+        "as new pointer expressions": 12
+    },
+    "std::timed_mutex": {
+        "distinct count": 8,
+        "as variable declarations": 11,
+        "as function return types": 1
+    },
+    "std::recursive_timed_mutex": {
+        "distinct count": 1,
+        "as variable declarations": 2,
+        "as function return types": 8
+    }
+}

@@ -50,10 +50,11 @@ def initializer_func(ctx, f, args):
     #     ctx.set_loggers(loggers.stdout, loggers.stderr)
     return f(*args)
 
+#TODO: currently only debian is supported. add more in the future
 def get_dockerfile(project_info, ctx):
     clang_version = ctx.cfg["analyze"]["clang_version"]
-    # return "spcleth/fbacode:debian-bookworm-cxxlangstat-{}".format(clang_version)
-    return "spcleth/fbacode:debian-bookworm-cxxlangstat-test-{}".format(clang_version)
+    return "spcleth/fbacode:debian-bookworm-cxxlangstat-{}".format(clang_version)
+    # return "spcleth/fbacode:debian-bookworm-cxxlangstat-test-{}".format(clang_version)
     # if project_info["type"] == "debian":
         # return "spcleth/fbacode:debian-bookworm-cxxlangstat-{}".format(clang_version)
     # raise NotImplementedError("Dockerfile for {} not implemented".format(project_info["type"]))
@@ -236,14 +237,14 @@ def start_docker(
     # Get output JSON
     try:
         binary_data, _ = container.get_archive(f"{DOCKER_MOUNT_POINT}/analyze/output.json")
-        # with next(binary_data) not the whole thing is loaded if file is big
+        # look into docker_entrypoing.py for what output.json is
+
+        # next(binary_data) does not the whole thing is loaded if file is big
         bin = b"".join(list(binary_data))
         tar_file = tarfile.open(fileobj=io.BytesIO(bin))
         data = tar_file.extractfile(tar_file.getmember("output.json"))
         project.update(json.loads(data.read())["project"])
 
-        # data.seek(0)
-        # print(f"Contents of output.json: {json.loads(data.read())}")
     except Exception as e:
         # ctx.err_log.print_error(
         #     idx,
@@ -261,10 +262,8 @@ def start_docker(
         project["analyze"] = {}
     project["analyze"]["docker_log"] = docker_log_file
     
-    return True and project["analysis emit-features retcode"] == 0 and project["analysis emit-stats retcode"] == 0
+    return project["analysis emit-features retcode"] == 0 and project["analysis emit-stats retcode"] == 0
 
-def analyze_project(idx, path_to_collection, ast_archive_root, project_name, project, ctx):
-    pass
 
 def fetch_AST_and_analyze(idx, path_to_collection, ast_archive_root, results_dir_root, project_name, project, ctx):
     print(f"Analyzing {project_name}")
@@ -275,9 +274,6 @@ def fetch_AST_and_analyze(idx, path_to_collection, ast_archive_root, results_dir
     ast_archive = join(ast_archive_root, project_name)
     if not exists(ast_archive):
         mkdir(ast_archive)
-    # features_dir = join(results_dir, project_name)
-    # if not exists(features_dir):
-    #     mkdir(features_dir)
     features_dir = results_dir
 
     if not exists(join(ast_archive, project_name + '.tar.gz')):
@@ -285,15 +281,11 @@ def fetch_AST_and_analyze(idx, path_to_collection, ast_archive_root, results_dir
         # TODO: also make it work if the artifacts are stored locally
         try:
             with Connection(host = ctx.cfg["remote"]["host"], user = ctx.cfg["remote"]["user"], connect_timeout = 5) as conn:
-                # print(f"Remote path: {join(path_to_collection, project_name + '.tar.gz')}")
-                # print(f"Local path: {join(ctx.cfg['analyze']['ast_archive'], project_name, project_name + '.tar.gz')}")
                 conn.get(remote = join(path_to_collection, project_name + '.tar.gz'), 
                         local = join(ast_archive, project_name + '.tar.gz'))
         except Exception as e:
             print(f"Failed to fetch {project_name} from storage server: {e}")
             print(f"TRACEBACK: {traceback.format_exc()}")
-            # print(f"Remote path: {join(path_to_collection, project_name + '.tar.gz')}")
-            # print(f"Local path: {join(ast_archive, project_name, project_name + '.tar.gz')}")
             project["analysis"] = "fetch fail"
             return project_name, project
 
@@ -317,7 +309,6 @@ def fetch_AST_and_analyze(idx, path_to_collection, ast_archive_root, results_dir
         "features_dir": features_dir,
         "dockerfile": dockerfile,
     }
-    print(f"Before starting docker, results_dir = {abspath(results_dir)}")
 
     total_analyze_time_start = time()
     try:
@@ -336,6 +327,8 @@ def fetch_AST_and_analyze(idx, path_to_collection, ast_archive_root, results_dir
     print(f"Removed ASTs of {project_name}, path: {ast_archive}")
 
     if result == False:
+        # TODO: make configure option for whether or not to delete the local artifacts 
+        # from a failed run
         # shutil.rmtree(results_dir, ignore_errors=True)
         # print(f"Removed results of {project_name}")
         project["analysis"] = "start_docker fail"
@@ -370,13 +363,7 @@ def analyze_projects(path_to_collection, ast_archive_root, results_dir_root, pro
         analyze_summary = json.load(f)
     
     manager = Manager()
-    # analyze_summary = manager.dict({})
     analyze_summary_lock = manager.Lock()
-
-    # with open("cache_no_asts.json", "r") as fin:
-    #     cache_no_asts = json.load(fin)
-
-    nr_of_asts_json = dict()
 
     with concurrent.futures.ProcessPoolExecutor(threads_count) as pool:
         futures = []
@@ -386,6 +373,7 @@ def analyze_projects(path_to_collection, ast_archive_root, results_dir_root, pro
         projects_info_as_list = list(projects_info.items())
         print(f"len of projects info in the beginning: {len(projects_info_as_list)}")
 
+        # TODO: remove this below
         # PROJECT_BLACKLIST = ["telegram", "ball", "cmake", "trilinos", "ifcplus", "kicad", "quantlib", "cvc4", "gthumb", "meshlab", "klayout", "digikam", "vtk9", "cegui-mk2", "qt6-declarative", "nodejs", "dart", "akonadi", "blis", "qbittorrent", "gtk3", "regina", "ceres", "dolphin"]
         # PROJECT_BLACKLIST = ["ffmpeg"]
         # PROJECT_WHITELIST = ["libpcap", "qmmp", "netsurf"]
@@ -400,22 +388,14 @@ def analyze_projects(path_to_collection, ast_archive_root, results_dir_root, pro
         projects_info_as_list = [(project_name, project) for (project_name, project) in projects_info_as_list if project["status"] == "success" and \
                     (project_name not in analyze_summary or analyze_summary[project_name]["analysis"] != "success")]
         
-        # projects_info_as_list = [(project_name, project) for (project_name, project) in projects_info_as_list if "nr_asts" in project["build"] and project["build"]["nr_asts"] > 0]
-        # projects_info_as_list = [(project_name, project) for (project_name, project) in projects_info_as_list if ("archive_size" in project and project["archive_size"] < 10 * 1024 * 1024 * 1024) or "archive_size" not in project]
-
         random.shuffle(projects_info_as_list)
         jobs_left = len(projects_info_as_list)
-        print(f"len of projects info: {len(projects_info_as_list)}")
+        print(f"Len of projects info: {len(projects_info_as_list)}")
         idx = 0
         while len(futures) < min(threads_count, len(projects_info_as_list)):
             if idx >= len(projects_info_as_list):
                 break
             project_name, project = projects_info_as_list[idx]
-            # if "nr_asts" in project["build"] and project["build"]["nr_asts"] == 0:
-            #     print(f"Project {project_name} has no ASTs, skipping")
-            #     idx += 1
-            #     jobs_left -= 1
-            #     continue
             futures.append(pool.submit(
                 initializer_func,
                 ctx,
@@ -433,7 +413,6 @@ def analyze_projects(path_to_collection, ast_archive_root, results_dir_root, pro
             idx += 1
             sleep(0.5) # each fetch runs an ssh connection to the storage server. too many connections at once cause the server to refuse the connection
 
-        # incomplete_futures = True
         # when one finishes, increment counter and add a new one to the queue
         while jobs_left > 0:
             completed_futures, _ = concurrent.futures.wait(futures, return_when=concurrent.futures.FIRST_COMPLETED)
@@ -444,14 +423,6 @@ def analyze_projects(path_to_collection, ast_archive_root, results_dir_root, pro
 
                 analyze_summary[project_name] = project
 
-                try:
-                    nr_of_asts_json[project_name] = project["project"]["ast_files"]["nr_asts"]
-                    with open("number_of_asts.json", "w") as fout:
-                        json.dump(nr_of_asts_json, fout, indent = 2)
-                except:
-                    pass
-
-
                 with open(join(results_dir_root, "analyze_summary.json"), "w") as f:
                     f.write(json.dumps(analyze_summary, indent=2))
 
@@ -461,11 +432,6 @@ def analyze_projects(path_to_collection, ast_archive_root, results_dir_root, pro
             
             while idx < len(projects_info_as_list) and len(futures) < threads_count:
                 project_name, project = projects_info_as_list[idx]
-                # if "nr_asts" in project["build"] and project["build"]["nr_asts"] == 0:
-                #     print(f"Project {project_name} has no ASTs, skipping")
-                #     idx += 1
-                #     jobs_left -= 1
-                #     continue
                 futures.append(pool.submit(
                     initializer_func,
                     ctx,

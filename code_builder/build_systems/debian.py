@@ -126,17 +126,10 @@ class Project:
         # -i to ignore changes
         jobs_count = os.environ.get("JOBS", 1)
 
-        # out = insert_build_stage_markers(join(self.temp_build_dir, "debian", "rules"))
-        # shutil.copy2(join(self.temp_build_dir, "debian", "rules"), join(self.build_dir, "rules.modified"))
-        # if not out:
-        #     self.error_log.print_error(self.idx, "Failed to insert build stage markers")
-        #     return False
-
         # https://www.man7.org/linux/man-pages/man1/dpkg-buildpackage.1.html
         # we want to modify the clang calls only during the build stage of the build
         # the buildinfo stage is the one that immediately follows the build stage
         out = run(
-            # f"dpkg-buildpackage -b --no-sign --no-check-builddeps -i='*' -j{jobs_count} --hook-build=\"touch /tmp/fbacode_build_stage_flag\" --hook-buildinfo=\"rm /tmp/fbacode_build_stage_flag\"",
             [
                 "dpkg-buildpackage",
                 "-b", # skip Debian bureaucracy, just build the binary
@@ -144,8 +137,6 @@ class Project:
                 "--no-check-builddeps",
                 '-i="*"',
                 "-j{}".format(jobs_count),
-                # "--hook-build=touch /tmp/fbacode_build_stage_flag",
-                # "--hook-buildinfo=rm /tmp/fbacode_build_stage_flag",
             ],
             cwd=self.temp_build_dir,
             stderr=subprocess.PIPE,
@@ -304,8 +295,4 @@ class Project:
 
     @staticmethod
     def get_docker_image(repo_dir, clang_version=9):
-        # return "spcleth/fbacode:debian-bookworm-clang-langstat-{}".format(clang_version)
-        return "spcleth/fbacode:debian-bookworm-clang-header-save-test-{}".format(clang_version)
-        # return "spcleth/fbacode:debian-bookworm-clang-test-{}".format(clang_version)
-        # return "spcleth/fbacode:debian-bookworm-clang-{}".format(clang_version)
-        # return "mcopik/fbacode:debian-buster-clang-{}".format(clang_version)
+        return "spcleth/fbacode:debian-bookworm-clang-header-save-{}".format(clang_version)

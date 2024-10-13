@@ -1,38 +1,5 @@
 #!/usr/bash
 
-run_command_with_lockfile_and_append_output() {
-    # https://www.davidpashley.com/articles/writing-robust-shell-scripts/
-    local command=$1
-    local output_file=$2
-    local lockfile=$3
-
-    while true ; do
-        if (set -o noclobber; echo "$$" > "$lockfile") 2> /dev/null; 
-        then
-            # This will cause the lock-file to be deleted in case of a
-            # premature exit.
-            trap 'rm -f "$lockfile"; exit $?' INT TERM EXIT
-
-            # Critical Section: Here you'd place the code/commands you want
-            # to be protected (i.e., not run in multiple processes at once).
-            # ${compiler} -Qunused-arguments -M "${EMIT_AST_ARGS[@]}" "${OMIT_ERRORS_ARGS[@]}" 1>> /home/fba_code/build/header_dependencies.log 2> /dev/null || true
-            # print cwd to file
-
-            echo "$(pwd)" >> "$output_file"
-            eval $command >> $output_file 2> /dev/null
-            printf "\n" >> "$output_file"
-
-            rm -f "$lockfile"
-            trap - INT TERM EXIT
-            break
-        else
-            # echo "Failed to acquire lock-file: $lockfile." 
-            # echo "Held by process $(cat $lockfile)."
-            sleep 0.1
-        fi
-    done
-}
-
 function run_compilation() {
 
     compiler=$1
@@ -174,7 +141,6 @@ function run_compilation() {
             echo "$(pwd)" >> /home/fba_code/build/header_dependencies/$$.log
             ${compiler} -Qunused-arguments -M "${EMIT_AST_ARGS[@]}" "${OMIT_ERRORS_ARGS[@]}" 1>> /home/fba_code/build/header_dependencies/$$.log 2> /dev/null || true
             printf "\n" >> /home/fba_code/build/header_dependencies/$$.log 
-            # run_command_with_lockfile_and_append_output "\${compiler} -Qunused-arguments -M \${EMIT_AST_ARGS[@]} \${OMIT_ERRORS_ARGS[@]}" "/home/fba_code/build/header_dependencies.log" "/home/fba_code/build/header_dependencies.lock"
         else
             printf "$$ contains temp\n" >> /home/fba_code/build/source-files-$$.log
         fi
@@ -203,7 +169,6 @@ function run_compilation() {
             echo "$(pwd)" >> /home/fba_code/build/header_dependencies/$$.log
             ${compiler} -Qunused-arguments -M ${EMIT_AST_ARGS[@]} ${OMIT_ERRORS_ARGS[@]} 1>> /home/fba_code/build/header_dependencies/$$.log 2> /dev/null || true
             printf "\n" >> /home/fba_code/build/header_dependencies/$$.log 
-            # run_command_with_lockfile_and_append_output "\${compiler} -Qunused-arguments -M \${EMIT_AST_ARGS[@]} \${OMIT_ERRORS_ARGS[@]}" "/home/fba_code/build/header_dependencies.log" "/home/fba_code/build/header_dependencies.lock"
         else
             printf "$$ contains temp\n" >> /home/fba_code/build/source-files-$$.log
         fi

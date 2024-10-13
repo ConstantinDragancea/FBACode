@@ -12,44 +12,6 @@ def decode(stream):
     else:
         return stream
 
-def insert_build_stage_markers(rules_file):
-    if not os.path.isfile(rules_file):
-        print('File not found: ' + rules_file)
-        return False
-    with open(rules_file, 'r') as f:
-        rules = f.readlines()
-
-    # check if override_dh_auto_build* rules exist
-    lines_to_override = []
-    for i, line in enumerate(rules):
-        if line.startswith('override_dh_auto_build'):
-            j = i + 1
-            while j < len(rules) and rules[j].startswith('\t'):
-                j += 1
-            lines_to_override.append((i, j))
-
-    if len([x for x in rules if x.startswith('override_dh_auto_build:')]) == 0:
-        rules += ['override_dh_auto_build:\n', '\ttouch /tmp/fbacode_build_stage_flag\n', '\tdh_auto_build $@\n', '\trm -f /tmp/fbacode_build_stage_flag\n']
-
-    print(f'Rules to override for file {rules_file}:')
-    print(lines_to_override)
-    for (line_begin, line_end) in lines_to_override:
-        print(rules[line_begin].strip())
-        # print(rules[line_begin].strip(), rules[line_end].strip(), sep=' ')
-
-    offset = 0
-    for (line_begin, line_end) in lines_to_override:
-        rules = rules[:line_begin + offset + 1] + ['\ttouch /tmp/fbacode_build_stage_flag\n'] + rules[line_begin + offset + 1:]
-        offset += 1
-
-        rules = rules[:line_end + offset] + ['\trm -f /tmp/fbacode_build_stage_flag\n'] + rules[line_end + offset:]
-        offset += 1
-
-    shutil.move(rules_file, f'{rules_file}.bak')
-    with open(f'{rules_file}', 'w') as f:
-        f.writelines(rules)
-    
-    return True
 
 def run(command, cwd=None, capture_output = False, text = False, stdout = None, stderr = None) -> CompletedProcess:
     # Python 3.5+ - subprocess.run
